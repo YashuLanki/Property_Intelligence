@@ -81,7 +81,7 @@ def _start_scheduler():
 
         scheduler.add_job(
             _email,
-            trigger=IntervalTrigger(hours=6),
+            trigger=IntervalTrigger(minutes=30),
             id="check_email",
             next_run_time=_dt.now() + __import__('datetime').timedelta(seconds=30),
             replace_existing=True,
