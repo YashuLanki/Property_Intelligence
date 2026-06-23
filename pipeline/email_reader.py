@@ -222,11 +222,25 @@ def _store_attachment_chunks(name, msg_id, subject, text, file_type, collection,
 
 def _match_and_log(name, subject, text) -> tuple:
     """Run property matcher and log result. Returns (prop_tags, matches)."""
-    matches      = match_properties(f"{subject} {text[:500]}")
-    prop_tags    = matched_property_tags(matches)
-    matched_desc = format_matched_properties(matches)
+    from pipeline.property_matcher import match_from_filename
+
+    # File routing is based on filename only — subject/text match is for
+    # ChromaDB tagging only, not for deciding which folder to save to.
+    # A generic filename like CostarExport.xlsx should go to general/
+    # even if the subject mentions a city.
+    file_matches = match_from_filename(name)
+    strong_file_matches = [m for m in file_matches
+                           if "name_match" in m.get("match_reasons", [])
+                           or "city_match" in m.get("match_reasons", [])]
+
+    # For ChromaDB tags — use full subject+text match
+    all_matches  = match_properties(f"{subject} {text[:500]}")
+    prop_tags    = matched_property_tags(all_matches)
+    matched_desc = format_matched_properties(all_matches)
     log.info(f"  Matched properties: {matched_desc}")
-    return prop_tags, matches
+
+    # Return strong file matches for routing, all matches for ChromaDB tags
+    return prop_tags, strong_file_matches
 
 
 def _save_to_processed(raw_path: Path, name: str, prop_tags: dict, ts: str,

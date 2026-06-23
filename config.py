@@ -134,7 +134,7 @@ OUTLOOK_CLIENT_SECRET = os.getenv("OUTLOOK_CLIENT_SECRET", "")
 OUTLOOK_TOKEN_FILE    = SECRETS_DIR / "outlook_token.json"
 OUTLOOK_FOLDERS       = ["Inbox"]
 OUTLOOK_SENDER_WHITELIST = []
-OUTLOOK_LOOKBACK_DAYS = 7
+OUTLOOK_LOOKBACK_DAYS = 30
 
 # ─── Anthropic / Claude API ───────────────────────────────────────
 # Add to confidentials/.env:

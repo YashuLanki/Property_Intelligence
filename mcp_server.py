@@ -377,6 +377,29 @@ Always use the most specific tool available for the question."""
         except Exception as e:
             return f"Could not open folder: {e}"
 
+    @mcp.tool()
+    def open_general_files() -> str:
+        """
+        Open File Explorer to the general documents folder.
+        Use this when the user asks for files that are not tied to a specific property,
+        such as market reports, CoStar exports, general spreadsheets, or any file
+        that came from email but wasn't matched to a specific property.
+        """
+        import subprocess
+        from config import PROCESSED_DIR
+        try:
+            general_dir = PROCESSED_DIR / "general"
+            general_dir.mkdir(parents=True, exist_ok=True)
+            subprocess.Popen(f'explorer "{general_dir}"')
+            files = [f for f in general_dir.iterdir() if f.is_file()]
+            if files:
+                file_list = "\n".join(f"  - {f.name}" for f in sorted(files))
+                return f"Opened File Explorer to general documents folder.\n\nFiles available:\n{file_list}"
+            else:
+                return "Opened general documents folder — no files there yet."
+        except Exception as e:
+            return f"Could not open folder: {e}"
+
     return mcp
 
 
