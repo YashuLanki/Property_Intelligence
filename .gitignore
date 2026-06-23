@@ -1,0 +1,74 @@
+# ── Credentials & Secrets ─────────────────────────────────────────
+confidentials/
+.env
+*.env
+outlook_token.json
+
+# ── Database & Data ───────────────────────────────────────────────
+data/chroma_db/*
+data/raw_web/*
+data/raw_email/*
+data/logs/*
+data/ingested_registry.json
+data/web_registry.json
+data/email_registry.json
+data/property_scrape_registry.json
+
+# ── Processed Files (ingested documents) ──────────────────────────
+data/processed/*
+
+# ── Watched Folder (drop zone — not committed) ────────────────────
+data/watched_folder/*
+
+# ── Project Master (real file stays local) ────────────────────────
+data/project_master/*
+!data/project_master/.gitkeep
+
+# ── Keep folder structure via .gitkeep ────────────────────────────
+!data/chroma_db/.gitkeep
+!data/raw_web/.gitkeep
+!data/raw_email/.gitkeep
+!data/logs/.gitkeep
+!data/processed/.gitkeep
+!data/watched_folder/.gitkeep
+
+# ── Keep web sources ──────────────────────────────────────────────
+!data/web_sources/
+!data/web_sources/sources.csv
+
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual Environment ───────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Logs ──────────────────────────────────────────────────────────
+*.log
+
+# ── PyCharm ───────────────────────────────────────────────────────
+.idea/
+*.iml
+
+# ── VS Code ───────────────────────────────────────────────────────
+.vscode/
+
+# ── Windows ───────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ── Mac ───────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride

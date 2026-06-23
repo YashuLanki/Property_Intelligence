@@ -1,0 +1,266 @@
+"""
+ingestion/extractor.py
+----------------------
+Handles all file text extraction for the Vaulterup ingestion pipeline.
+
+Supported file types:
+  .pdf  — pdfplumber for text-based PDFs, Tesseract OCR for scanned/image PDFs
+  .xlsx — openpyxl for modern Excel files
+  .xls  — xlrd for older Excel files
+  .csv  — pandas for comma-separated data
+  .txt  — plain text read
+
+All file types are extracted into plain text, then passed through the
+same chunker and embedder as before.
+"""
+
+import logging
+from datetime import datetime
+from pathlib import Path
+
+import pdfplumber
+import pytesseract
+from pdf2image import convert_from_path
+
+from config import TESSERACT_PATH, POPPLER_PATH
+
+# Point pytesseract to the correct Tesseract executable
+pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
+log = logging.getLogger("vaulter.extractor")
+
+# ─── Supported File Types ─────────────────────────────────────────────────────
+
+SUPPORTED_EXTENSIONS = {".pdf", ".xlsx", ".xls", ".csv", ".txt"}
+
+
+def is_supported(path: Path) -> bool:
+    """Return True if this file type is supported by the extractor."""
+    return path.suffix.lower() in SUPPORTED_EXTENSIONS
+
+
+# ─── Main Extraction Entry Point ──────────────────────────────────────────────
+
+def extract(path: Path) -> tuple[str, dict]:
+    """
+    Main extraction entry point.
+    Routes each file to the correct extractor based on its extension.
+    Returns (full_text, metadata_dict).
+    """
+    ext = path.suffix.lower()
+
+    metadata = {
+        "filename":    path.name,
+        "file_type":   ext,
+        "ingested_at": datetime.now().isoformat(),
+        "page_count":  0,
+        "has_tables":  False,
+        "ocr_used":    False,
+    }
+
+    if ext == ".pdf":
+        return _extract_pdf(path, metadata)
+    elif ext in (".xlsx", ".xls"):
+        return _extract_excel(path, metadata)
+    elif ext == ".csv":
+        return _extract_csv(path, metadata)
+    elif ext == ".txt":
+        return _extract_txt(path, metadata)
+    else:
+        log.warning(f"  [WARN] Unsupported file type: {ext}")
+        return "", metadata
+
+
+# ─── PDF Extraction ───────────────────────────────────────────────────────────
+
+def _extract_pdf(path: Path, metadata: dict) -> tuple[str, dict]:
+    """
+    Try pdfplumber first (text-based PDFs).
+    If no text is found, automatically fall back to Tesseract OCR.
+    """
+    # Strategy 1: pdfplumber
+    text, metadata = _extract_with_pdfplumber(path, metadata)
+
+    # Strategy 2: OCR fallback for scanned/image PDFs
+    if not text.strip():
+        log.info("  No text layer found — running OCR (this may take a moment)...")
+        text = _extract_with_ocr(path, metadata)
+        metadata["ocr_used"] = True
+
+    return text, metadata
+
+
+def _extract_with_pdfplumber(path: Path, metadata: dict) -> tuple[str, dict]:
+    """Extract text and tables from a text-based PDF using pdfplumber."""
+    full_text = []
+
+    with pdfplumber.open(path) as pdf:
+        metadata["page_count"] = len(pdf.pages)
+
+        if pdf.metadata:
+            metadata["pdf_title"]  = pdf.metadata.get("Title", "") or ""
+            metadata["pdf_author"] = pdf.metadata.get("Author", "") or ""
+
+        for page_num, page in enumerate(pdf.pages, start=1):
+            text = page.extract_text()
+            if text:
+                full_text.append(f"[Page {page_num}]\n{text.strip()}")
+
+            tables = page.extract_tables()
+            if tables:
+                metadata["has_tables"] = True
+                for table in tables:
+                    table_text = _table_to_text(table, page_num)
+                    if table_text:
+                        full_text.append(table_text)
+
+    return "\n\n".join(full_text), metadata
+
+
+def _extract_with_ocr(path: Path, metadata: dict) -> str:
+    """
+    Convert each PDF page to an image and run Tesseract OCR.
+    Used automatically for scanned or image-based PDFs.
+    """
+    pages = convert_from_path(str(path), dpi=300, poppler_path=POPPLER_PATH)
+    metadata["page_count"] = len(pages)
+
+    ocr_text = []
+    for i, page_image in enumerate(pages, start=1):
+        log.info(f"  OCR processing page {i}/{len(pages)}...")
+        text = pytesseract.image_to_string(page_image, lang="eng")
+        if text.strip():
+            ocr_text.append(f"[Page {i} - OCR]\n{text.strip()}")
+
+    return "\n\n".join(ocr_text)
+
+
+def _table_to_text(table: list, page_num: int) -> str:
+    """Convert a pdfplumber table (list of lists) into readable plain text."""
+    if not table:
+        return ""
+    lines = [f"[Table on Page {page_num}]"]
+    for row in table:
+        cleaned = [str(cell).strip() if cell else "" for cell in row]
+        lines.append(" | ".join(cleaned))
+    return "\n".join(lines)
+
+
+# ─── Excel Extraction ─────────────────────────────────────────────────────────
+
+def _extract_excel(path: Path, metadata: dict) -> tuple[str, dict]:
+    """
+    Extract all sheets and cells from an Excel file (.xlsx or .xls).
+    Each sheet is converted to readable plain text with rows and columns.
+    """
+    import openpyxl
+
+    full_text = []
+    metadata["has_tables"] = True
+
+    try:
+        if path.suffix.lower() == ".xlsx":
+            wb = openpyxl.load_workbook(path, data_only=True)
+        else:
+            # .xls — convert via openpyxl after reading with xlrd
+            import xlrd
+            xls_wb = xlrd.open_workbook(str(path))
+            wb = _convert_xls_to_openpyxl(xls_wb)
+
+        sheet_count = len(wb.sheetnames)
+        metadata["page_count"] = sheet_count
+
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            sheet_lines = [f"[Sheet: {sheet_name}]"]
+
+            for row in ws.iter_rows(values_only=True):
+                # Skip completely empty rows
+                if all(cell is None for cell in row):
+                    continue
+                cleaned = [str(cell).strip() if cell is not None else "" for cell in row]
+                sheet_lines.append(" | ".join(cleaned))
+
+            if len(sheet_lines) > 1:  # More than just the header
+                full_text.append("\n".join(sheet_lines))
+
+        log.info(f"  Extracted {sheet_count} sheet(s) from Excel file")
+
+    except Exception as e:
+        log.error(f"  [ERROR] Failed to extract Excel file: {e}")
+        return "", metadata
+
+    return "\n\n".join(full_text), metadata
+
+
+def _convert_xls_to_openpyxl(xls_wb):
+    """Convert an xlrd workbook to openpyxl format for uniform processing."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    for sheet_idx in range(xls_wb.nsheets):
+        xls_sheet = xls_wb.sheet_by_index(sheet_idx)
+        ws = wb.create_sheet(title=xls_sheet.name)
+        for row in range(xls_sheet.nrows):
+            for col in range(xls_sheet.ncols):
+                ws.cell(row=row + 1, column=col + 1, value=xls_sheet.cell_value(row, col))
+
+    return wb
+
+
+# ─── CSV Extraction ───────────────────────────────────────────────────────────
+
+def _extract_csv(path: Path, metadata: dict) -> tuple[str, dict]:
+    """
+    Extract data from a CSV file using pandas.
+    Converts rows and columns into readable plain text.
+    """
+    import pandas as pd
+
+    metadata["has_tables"] = True
+
+    try:
+        # Try UTF-8 first, fall back to latin-1 for older exports
+        try:
+            df = pd.read_csv(path, encoding="utf-8")
+        except UnicodeDecodeError:
+            df = pd.read_csv(path, encoding="latin-1")
+
+        metadata["page_count"] = 1
+
+        lines = [f"[CSV File: {path.name}]"]
+        lines.append(f"Columns: {' | '.join(str(c) for c in df.columns)}")
+        lines.append(f"Rows: {len(df)}")
+        lines.append("")
+
+        # Include all rows as readable text
+        for _, row in df.iterrows():
+            row_text = " | ".join(str(v) for v in row.values)
+            lines.append(row_text)
+
+        log.info(f"  Extracted {len(df)} rows from CSV file")
+        return "\n".join(lines), metadata
+
+    except Exception as e:
+        log.error(f"  [ERROR] Failed to extract CSV file: {e}")
+        return "", metadata
+
+
+# ─── Plain Text Extraction ────────────────────────────────────────────────────
+
+def _extract_txt(path: Path, metadata: dict) -> tuple[str, dict]:
+    """Read a plain text file directly."""
+    try:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = path.read_text(encoding="latin-1")
+
+        metadata["page_count"] = 1
+        log.info(f"  Extracted {len(text):,} characters from text file")
+        return text, metadata
+
+    except Exception as e:
+        log.error(f"  [ERROR] Failed to read text file: {e}")
+        return "", metadata
