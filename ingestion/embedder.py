@@ -166,7 +166,7 @@ def store_chunks(chunks: list[str], metadata: dict, doc_hash: str):
     with _WRITE_LOCK:
         try:
             collection = get_collection()
-            collection.add(documents=chunks, metadatas=metadatas, ids=ids)
+            collection.upsert(documents=chunks, metadatas=metadatas, ids=ids)
             log.info(f"  Stored {len(chunks)} chunks in ChromaDB")
         except Exception as e:
             log.error(f"  ChromaDB write failed: {e} — resetting client for next attempt")

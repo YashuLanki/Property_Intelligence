@@ -50,10 +50,15 @@ CHUNK_SIZE    = 800
 CHUNK_OVERLAP = 100
 
 CHUNK_TIERS = [
-    (10,  500,  50),
-    (50,  800,  100),
-    (100, 1200, 150),
-    (999, 1500, 200),
+    (10,   500,   50),
+    (50,   800,  100),
+    (100, 1200,  150),
+    (999, 1500,  200),
+    # Sentinel for Excel/structured data (page_count=9999 set by extractor).
+    # Keeps entire rows intact — CoStar rows average 1,600 chars, max ~3,000.
+    # Without this, the chunker hard-splits rows at 500-1500 char boundaries,
+    # fragmenting pipe-separated data and breaking row extraction.
+    (9999, 8000, 200),
 ]
 
 def get_chunk_settings(page_count: int) -> tuple[int, int]:

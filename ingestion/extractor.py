@@ -182,7 +182,18 @@ def _extract_excel(path: Path, metadata: dict) -> tuple[str, dict]:
                 sheet_lines.append(" | ".join(cleaned))
 
             if len(sheet_lines) > 1:  # More than just the header
-                full_text.append("\n".join(sheet_lines))
+                # Use double newline (\n\n) between rows so the chunker
+                # treats each row as its own paragraph and keeps it intact.
+                # Single \n made the entire sheet one giant paragraph,
+                # causing the chunker to cut rows in half at arbitrary
+                # character positions — breaking pipe-separated data extraction.
+                full_text.append("\n\n".join(sheet_lines))
+
+        # Set a sentinel page_count that triggers the 8000-char chunk tier
+        # in config.CHUNK_TIERS. Excel rows average 1,600 chars (CoStar
+        # exports run to ~3,000 chars/row). The default 500-char chunk size
+        # fragments every row — 8,000 keeps each row intact as one chunk.
+        metadata["page_count"] = 9999
 
         log.info(f"  Extracted {sheet_count} sheet(s) from Excel file")
 

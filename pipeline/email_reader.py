@@ -220,9 +220,9 @@ def simple_embed(text: str) -> list[float]:
     result = LocalHashEmbedding()([text])[0]
     return result.tolist() if hasattr(result, 'tolist') else list(result)
 
-def chunk_text(text: str) -> list[str]:
+def chunk_text(text: str, page_count: int = 1) -> list[str]:
     from ingestion.chunker import chunk_text as _chunk_text
-    return _chunk_text(text)
+    return _chunk_text(text, page_count=page_count)
 
 def store_email(msg_id, subject, sender, date_str, body, collection):
     if len(body) < 50:
@@ -263,9 +263,9 @@ def store_email(msg_id, subject, sender, date_str, body, collection):
 # ─── Attachment Routing ───────────────────────────────────────────
 
 def _store_attachment_chunks(name, msg_id, subject, text, file_type, collection,
-                             prop_tags=None):
+                             prop_tags=None, page_count: int = 1):
     """Helper — chunks text and stores in ChromaDB with attachment metadata."""
-    chunks = chunk_text(text)
+    chunks = chunk_text(text, page_count=page_count)
     if not chunks:
         return 0
     ids, docs, metas, embeds = [], [], [], []
@@ -452,13 +452,21 @@ def route_attachment(token, msg_id, att, subject, collection):
                     row_text = " | ".join(str(c) for c in row if c is not None)
                     if row_text.strip():
                         lines.append(row_text)
-            text = "\n".join(lines)
+            # Double newline between rows so the chunker treats each row as its
+            # own paragraph and keeps it intact. Single \n made the entire sheet
+            # one giant paragraph, causing the chunker to cut rows at arbitrary
+            # 500-char boundaries — fragmenting pipe-separated data.
+            # page_count=9999 triggers the 8000-char chunk tier in config.CHUNK_TIERS,
+            # which is large enough to hold any Excel row without splitting it.
+            # This only affects Excel files — all other attachment types use the
+            # default page_count=1 (500-char chunks) and are unaffected.
+            text = "\n\n".join(lines)
             if len(text) < 50:
                 log.info(f"  Excel too short: {name}")
                 return
             prop_tags, matches = _match_and_log(name, subject, text)
             n = _store_attachment_chunks(name, msg_id, subject, text, "excel",
-                                         collection, prop_tags)
+                                         collection, prop_tags, page_count=9999)
             _save_to_processed(raw_path, name, prop_tags, ts, matches)
             log.info(f"  ✓ Excel stored: {name} ({n} chunks)")
         except ImportError:

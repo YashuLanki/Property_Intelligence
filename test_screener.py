@@ -3,7 +3,7 @@ from analysis.screener import extract_rows, run_pipeline
 from config import ANTHROPIC_API_KEY
 
 col = get_collection()
-res = col.get(where={"type": "email_attachment_excel"}, limit=200, include=["documents", "metadatas"])
+res = col.get(where={'source': 'CostarExport.xlsx'}, limit=300, include=['documents', 'metadatas'])
 chunks = [{"text": d} for d in res["documents"]] if res and res.get("documents") else []
 print(f"Chunks found: {len(chunks)}")
 

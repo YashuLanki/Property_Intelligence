@@ -464,7 +464,7 @@ returns a complete dossier for you to evaluate each property."""
                 if not costar_chunks:
                     try:
                         res = collection.get(
-                            where={"type": "email_attachment_excel"},
+                            where={"source": "CostarExport.xlsx"},
                             limit=400,
                             include=["documents", "metadatas"],
                         )
