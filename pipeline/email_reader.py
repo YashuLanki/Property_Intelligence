@@ -236,18 +236,23 @@ def store_email(msg_id, subject, sender, date_str, body, collection):
     if matches:
         log.info(f"  Email matched: {format_matched_properties(matches)}")
 
+    # Build a short preview of the message for Claude to use in summaries
+    # Takes the first meaningful sentence(s) up to 300 chars
+    body_preview = body[:300].rsplit(" ", 1)[0] + "..." if len(body) > 300 else body
+
     chunks = chunk_text(body)
     ids, docs, metas, embeds = [], [], [], []
     for i, chunk in enumerate(chunks):
         ids.append(f"email_{msg_id}_{i}")
         docs.append(chunk)
         metas.append({
-            "source":  sender,
-            "subject": subject[:200],
-            "date":    date_str,
-            "msg_id":  msg_id,
-            "chunk":   i,
-            "type":    "email",
+            "source":       sender,
+            "subject":      subject[:200],
+            "date":         date_str,
+            "msg_id":       msg_id,
+            "chunk":        i,
+            "type":         "email",
+            "body_preview": body_preview,
             **prop_tags,
         })
         embeds.append(simple_embed(chunk))

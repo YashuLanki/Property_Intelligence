@@ -307,11 +307,13 @@ def _build_chunk(doc: str, meta: dict, score) -> dict:
         "source_type":        source_type,
         "source_label":       SOURCE_TYPE_LABELS.get(source_type, source_type.replace("_", " ").title()),
         "source":             meta.get("source", meta.get("filename", "")),
+        "subject":            meta.get("subject", ""),
+        "body_preview":       meta.get("body_preview", ""),
         "property":           meta.get("property", ""),
         "matched_properties": meta.get("matched_properties", ""),
         "state":              meta.get("state", ""),
         "category":           meta.get("category", ""),
-        "scraped_at":         meta.get("scraped_at", meta.get("ingested_at", "")),
+        "scraped_at":         meta.get("scraped_at", meta.get("ingested_at", meta.get("date", ""))),
         "score":              score,
     }
 
@@ -357,6 +359,17 @@ def format_context_for_claude(chunks: list[dict]) -> str:
         header += f" | Date: {date}"
 
         lines.append(header)
+
+        # For emails, show subject and body preview before the chunk text
+        # so Claude can summarise what the message was about at a glance
+        if chunk["source_type"] == "email":
+            subject = chunk.get("subject", "")
+            preview = chunk.get("body_preview", "")
+            if subject:
+                lines.append(f"Subject: {subject}")
+            if preview and preview not in chunk["text"][:len(preview) + 10]:
+                lines.append(f"Message: {preview}")
+
         lines.append(chunk["text"])
         lines.append("")
 
