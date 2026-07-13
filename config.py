@@ -7,7 +7,7 @@ All paths, settings, and constants live here.
 Cross-platform: automatically detects Windows or Mac and sets the correct paths.
 To adapt this project to a new machine, only this file needs to be updated.
 
-Secrets (.env and outlook_token.json) are stored in:
+Secrets (..env and outlook_token.json) are stored in:
   Windows : C:/Users/<YourName>/Vaulter AI/confidentials/
   Mac     : <project_root>/confidentials/
 
@@ -30,7 +30,7 @@ else:
 
 SECRETS_DIR.mkdir(parents=True, exist_ok=True)
 
-load_dotenv(SECRETS_DIR / ".env")
+load_dotenv(SECRETS_DIR / ".env", override=True)
 
 # ─── Data Folders ─────────────────────────────────────────────────
 
@@ -39,10 +39,28 @@ WATCH_DIR      = DATA_DIR / "watched_folder"
 PROCESSED_DIR  = DATA_DIR / "processed"
 CHROMA_DIR     = DATA_DIR / "chroma_db"
 LOG_DIR        = DATA_DIR / "logs"
-REGISTRY_FILE  = DATA_DIR / "ingested_registry.json"
+REGISTRY_DIR   = DATA_DIR / "registry"
+REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+REGISTRY_FILE  = REGISTRY_DIR / "ingested_registry.json"
+
+# CoStar listing screener (analysis/screening/) — uploaded/pasted source
+# files land in SCREENING_UPLOADS_DIR; combined workbooks + manifest.json
+# land in SCREENING_OUTPUT_DIR. Both live under the same DATA_DIR as every
+# other stage in this project.
+OUTPUT_DIR            = DATA_DIR / "output"
+PROXIMITY_OUTPUT_DIR  = OUTPUT_DIR / "proximity"
+SCREENING_OUTPUT_DIR  = OUTPUT_DIR / "screening"
+SCREENING_UPLOADS_DIR = DATA_DIR / "screening_uploads"
+
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PROXIMITY_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SCREENING_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SCREENING_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+SCREENING_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SCREENING_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ─── Chunking Settings ────────────────────────────────────────────
 
@@ -127,7 +145,7 @@ WEB_SOURCES = [
 SCHEDULER_TIMEZONE = "America/Phoenix"
 
 # ─── Outlook / Microsoft Graph ────────────────────────────────────
-# Add to confidentials/.env:
+# Add to confidentials/..env:
 #   OUTLOOK_CLIENT_ID=your-application-id
 #   OUTLOOK_TENANT_ID=your-directory-id
 #   OUTLOOK_CLIENT_SECRET=your-client-secret
@@ -141,23 +159,34 @@ OUTLOOK_SENDER_WHITELIST = []
 OUTLOOK_LOOKBACK_DAYS = 30
 
 # ─── Anthropic / Claude API ───────────────────────────────────────
-# Add to confidentials/.env:
+# Add to confidentials/..env:
 #   ANTHROPIC_API_KEY=sk-ant-...
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # ─── Google Places API ────────────────────────────────────────────
-# Add to confidentials/.env:
+# Add to confidentials/..env:
 #   GOOGLE_PLACES_API_KEY=AIzaSy...
 
 GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
+
+# ─── Google Maps Platform (CoStar Screener — Phase 4 verification) ────
+# Add to confidentials/..env:
+#   GOOGLE_MAPS_API_KEY=AIzaSy...
+# Needs Elevation, Places, Roads, Geocoding, Distance Matrix, Static Maps,
+# Street View Static, Solar, Address Validation, and Air Quality enabled
+# (whichever subset is enabled, Phase 4 auto-detects and uses only those).
+# If unset, screen_listings still runs Phases 1-3 and Phase 4's finalist
+# selection, just skips the Google ground-truth enrichment step.
+
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
 # ══════════════════════════════════════════════════════════════════
 # Stage 3 — MCP Server
 # ══════════════════════════════════════════════════════════════════
 
 # Secret key that Claude.ai must send with every MCP request.
-# Set this in confidentials/.env:
+# Set this in confidentials/..env:
 #   MCP_API_KEY=vaulter_mcp_your_random_string_here
 #
 # Generate one with: python -c "import secrets; print(secrets.token_hex(24))"

@@ -36,7 +36,7 @@ def get_access_token() -> str:
     if not OUTLOOK_CLIENT_ID:
         raise ValueError(
             "OUTLOOK_CLIENT_ID not set.\n"
-            "Add it to your .env file:\n"
+            "Add it to your ..env file:\n"
             "  OUTLOOK_CLIENT_ID=your-application-id\n"
         )
 

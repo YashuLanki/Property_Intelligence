@@ -296,7 +296,8 @@ def run_proximity_search(property_name: str,
     import requests
 
     data_dir = vaulter_dir / "data"
-    prox_dir = vaulter_dir / "data" / "proximity_output"
+    from config import PROXIMITY_OUTPUT_DIR
+    prox_dir = PROXIMITY_OUTPUT_DIR
     prox_dir.mkdir(exist_ok=True)
 
     # ── Load config from config.py ───────────────────────────────
@@ -429,42 +430,10 @@ def run_proximity_search(property_name: str,
     deduped.sort(key=lambda x: x["distance_miles"])
 
     # ── Export GeoJSON ────────────────────────────────────────────
-    features = [{
-        "type": "Feature",
-        "geometry": {"type": "Point", "coordinates": [lon, lat]},
-        "properties": {
-            "name":           f"[Subject] {matched_name}",
-            "category":       "Subject Property",
-            "distance_miles": 0,
-            "distance_label": "Subject Property",
-            "marker-color":   "#FFD700",
-        },
-    }]
-    for r in deduped:
-        features.append({
-            "type": "Feature",
-            "geometry": {"type": "Point",
-                         "coordinates": [r["longitude"], r["latitude"]]},
-            "properties": {
-                "name":           f"{r['icon']} {r['name']}",
-                "category":       r["category"],
-                "address":        r["address"],
-                "distance_miles": r["distance_miles"],
-                "distance_label": r["distance_label"],
-                "rating":         r["rating"],
-                "marker-color":   r["color"],
-            },
-        })
-
-    slug     = matched_name.replace(" ", "_").replace("/", "-").replace("&", "and")
-    ts       = datetime.now().strftime("%Y%m%d_%H%M")
-    gj_path  = prox_dir / f"{slug}_{ts}.geojson"
+    slug = matched_name.replace(" ", "_").replace("/", "-").replace("&", "and")
+    ts = datetime.now().strftime("%Y%m%d_%H%M")
+    xlsx_path = prox_dir / f"{slug}_{ts}.xlsx"
     csv_path = prox_dir / f"{slug}_{ts}.csv"
-
-    gj_path.write_text(
-        json.dumps({"type": "FeatureCollection", "features": features}, indent=2),
-        encoding="utf-8"
-    )
 
     # ── Export CSV ────────────────────────────────────────────────
     fieldnames = ["name", "category", "address", "latitude", "longitude",
@@ -486,12 +455,35 @@ def run_proximity_search(property_name: str,
         for r in deduped:
             w.writerow(r)
 
-    log.info(f"[PROXIMITY] {matched_name} — {len(deduped)} results → {gj_path.name}")
+        # ── Export XLSX (replaces GeoJSON) ─────────────────────────────
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Proximity"
+        ws.append(fieldnames)
+
+        subject_row = {
+            "name": f"[Subject] {matched_name}",
+            "category": "Subject Property",
+            "latitude": lat,
+            "longitude": lon,
+            "distance_miles": 0,
+            "direction": "N/A",
+            "distance_label": "Subject Property",
+            "source": "Vaulter Project Master",
+        }
+        ws.append([subject_row.get(f, "") for f in fieldnames])
+        for r in deduped:
+            ws.append([r.get(f, "") for f in fieldnames])
+        wb.save(xlsx_path)
+
+    log.info(f"[PROXIMITY] {matched_name} — {len(deduped)} results → {xlsx_path.name}")
 
     return (
         f"Proximity search complete for {matched_name}.\n"
         f"Radius: {radius_miles} miles | {len(deduped)} unique results found.\n\n"
-        f"Files saved to data/proximity_output/:\n"
-        f"  CSV     -> {csv_path.name}\n"
-        f"  GeoJSON -> {gj_path.name} (drag into Felt)"
+        f"Files saved to data/output/proximity/:\n"
+        f"  CSV  -> {csv_path.name}\n"
+        f"  XLSX -> {xlsx_path.name}"
     )
+

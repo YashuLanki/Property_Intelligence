@@ -53,7 +53,7 @@ def _get_client() -> anthropic.Anthropic:
     if not api_key:
         raise ValueError(
             "ANTHROPIC_API_KEY not set.\n"
-            "Add it to your confidentials/.env file:\n"
+            "Add it to your confidentials/..env file:\n"
             "  ANTHROPIC_API_KEY=sk-ant-...\n"
         )
     return anthropic.Anthropic(api_key=api_key)
@@ -70,7 +70,7 @@ def _call_claude(user_prompt: str, max_tokens: int = 1500) -> str:
         )
         return message.content[0].text
     except anthropic.AuthenticationError:
-        raise ValueError("Invalid Anthropic API key. Check ANTHROPIC_API_KEY in confidentials/.env")
+        raise ValueError("Invalid Anthropic API key. Check ANTHROPIC_API_KEY in confidentials/..env")
     except anthropic.RateLimitError:
         raise RuntimeError("Rate limit hit — wait a moment and try again.")
     except Exception as e:

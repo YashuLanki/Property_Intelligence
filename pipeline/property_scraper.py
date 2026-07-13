@@ -45,7 +45,7 @@ from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
-    LOG_DIR, RAW_WEB_DIR, DATA_DIR,
+    LOG_DIR, RAW_WEB_DIR, DATA_DIR, REGISTRY_DIR,
     CHROMA_DIR, CHROMA_COLLECTION_NAME,
     LOG_LEVEL,
 )
@@ -63,7 +63,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 PROJECT_MASTER_DIR = DATA_DIR / "project_master"
-REGISTRY_FILE      = DATA_DIR / "property_scrape_registry.json"
+REGISTRY_FILE = REGISTRY_DIR / "property_scrape_registry.json"
 
 # ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
 # Built-in Fallback Property List

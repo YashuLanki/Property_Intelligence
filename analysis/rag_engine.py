@@ -98,12 +98,13 @@ def get_recent_emails(n: int = 15) -> list[dict]:
 
     results = collection.get(
         where={"type": "email"},
-        limit=min(n * 3, 500),
         include=["documents", "metadatas"],
     )
 
     chunks = _format_get_results(results)
-    # Sort by scraped_at descending (most recent first)
+    # Sort by scraped_at descending (most recent first) — _build_chunk()
+    # already maps the email metadata's "date" field into "scraped_at",
+    # so this key is correct on the transformed chunk dicts.
     chunks.sort(key=lambda x: x.get("scraped_at", ""), reverse=True)
     return chunks[:n]
 
@@ -118,8 +119,7 @@ def get_recent_web_intelligence(n: int = 12) -> list[dict]:
         return []
 
     results = collection.get(
-        where={"type": {"$in": ["web_scrape", "property_intelligence"]}},
-        limit=min(n * 4, 500),
+        where={"type": "email"},
         include=["documents", "metadatas"],
     )
 

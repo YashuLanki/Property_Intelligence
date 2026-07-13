@@ -71,7 +71,7 @@ def cmd_stats():
     import json
     from ingestion.embedder import get_stats
     from ingestion.registry import load_registry
-    from config import DATA_DIR, CHROMA_DIR, CHROMA_COLLECTION_NAME
+    from config import DATA_DIR, CHROMA_DIR, CHROMA_COLLECTION_NAME, REGISTRY_DIR
 
     stats    = get_stats()
     registry = load_registry()
@@ -82,9 +82,9 @@ def cmd_stats():
         except Exception:
             return {}
 
-    web_registry       = _load_json(DATA_DIR / "web_registry.json")
-    prop_registry      = _load_json(DATA_DIR / "property_scrape_registry.json")
-    email_registry_raw = _load_json(DATA_DIR / "email_registry.json")
+    web_registry = _load_json(REGISTRY_DIR / "web_registry.json")
+    prop_registry = _load_json(REGISTRY_DIR / "property_scrape_registry.json")
+    email_registry_raw = _load_json(REGISTRY_DIR / "email_registry.json")
     email_count        = len(email_registry_raw)
 
     web_chunks  = {}
@@ -256,16 +256,16 @@ def cmd_mcp(port: int = None):
 
     if not MCP_API_KEY:
         log.warning("=" * 60)
-        log.warning("  WARNING: MCP_API_KEY is not set in your .env file.")
+        log.warning("  WARNING: MCP_API_KEY is not set in your ..env file.")
         log.warning("  Your MCP server has no authentication.")
         log.warning("  Generate a key: python -c \"import secrets; print(secrets.token_hex(24))\"")
-        log.warning("  Then add MCP_API_KEY=<key> to confidentials/.env")
+        log.warning("  Then add MCP_API_KEY=<key> to confidentials/..env")
         log.warning("=" * 60)
 
     log.info("=" * 60)
     log.info("  Vaulter AI — MCP Server")
     log.info(f"  Transport  : stdio (Claude Desktop launches this process directly)")
-    log.info(f"  Auth       : {'MCP_API_KEY set' if MCP_API_KEY else 'DISABLED — set MCP_API_KEY in .env'}")
+    log.info(f"  Auth       : {'MCP_API_KEY set' if MCP_API_KEY else 'DISABLED — set MCP_API_KEY in ..env'}")
     log.info("  Connect via claude.ai → Settings → Connectors")
     log.info("  Press Ctrl+C to stop.")
     log.info("=" * 60)

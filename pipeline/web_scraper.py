@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
-    LOG_DIR, RAW_WEB_DIR, DATA_DIR,
+    LOG_DIR, RAW_WEB_DIR, DATA_DIR, REGISTRY_DIR,
     CHROMA_DIR, CHROMA_COLLECTION_NAME,
     WEB_SOURCES, LOG_LEVEL,
 )
@@ -118,7 +118,7 @@ HEADERS = {
 }
 
 # ─── Registry (tracks content hashes to skip unchanged pages) ─────
-REGISTRY_FILE = DATA_DIR / "web_registry.json"
+REGISTRY_FILE = REGISTRY_DIR / "web_registry.json"
 
 def load_registry() -> dict:
     if REGISTRY_FILE.exists():

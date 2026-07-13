@@ -27,7 +27,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
-    LOG_DIR, RAW_EMAIL_DIR, DATA_DIR,
+    LOG_DIR, RAW_EMAIL_DIR, DATA_DIR, REGISTRY_DIR,
     WATCH_DIR, CHROMA_DIR, CHROMA_COLLECTION_NAME,
     LOG_LEVEL,
     OUTLOOK_FOLDERS, OUTLOOK_SENDER_WHITELIST, OUTLOOK_LOOKBACK_DAYS,
@@ -50,7 +50,7 @@ log = logging.getLogger(__name__)
 GRAPH = "https://graph.microsoft.com/v1.0"
 
 # ─── Registry (tracks processed message IDs) ──────────────────────
-REGISTRY_FILE = DATA_DIR / "email_registry.json"
+REGISTRY_FILE = REGISTRY_DIR / "email_registry.json"
 
 def load_registry() -> set:
     if REGISTRY_FILE.exists():

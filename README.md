@@ -20,6 +20,40 @@ the team's existing Claude.ai Team subscription via an MCP server.
 
 ---
 
+## CoStar Listing Screener (`analysis/screening/`)
+
+A 4-phase pipeline for screening inbound CoStar exports and broker spreadsheets,
+exposed through the MCP server so the team can screen a new listing sheet
+straight from claude.ai:
+
+| Phase | Description |
+|-------|-------------|
+| 1 — Hard Rules | Applies deterministic rules (minimum acreage, flood risk, target land-use categories, existing structures, stale listings, etc.) and eliminates or flags each listing. |
+| 2 — Ranking | Scores every Phase 1 survivor across 5 weighted dimensions (days on market, price, land-use fit, developed-environment penalty, flood risk) into one Composite_Score, sorted descending. |
+| 3 — Deep Analysis | Sends each of the top-ranked listings to Claude for a qualitative writeup — strengths/risks, entitlement risk, MOIC fit, red flags, and a pursue/conditional/pass recommendation. |
+| 4 — Final Verification | Selects finalists from Phase 3's recommendation tiering, then (if configured) runs real-world Google Maps Platform ground-truth checks — elevation, nearby places, road access, satellite/street view imagery, distance to market — and a final multimodal Claude verdict per finalist. |
+
+**Tools:**
+- `screen_listings` — runs all 4 phases and returns a summary (market, screened/survived/finalist counts, top candidates with scores, and the path to the combined results workbook).
+- `open_screening_dashboard` — opens a local, interactive dashboard (Pursue/Scrutinize/Pass tabs, per-listing analyst notes, and a direct Excel download) in a browser.
+
+**Three ways to supply a CoStar file to `screen_listings`:**
+1. It's already in the system — ingested via a broker email or dropped into the watched folder. Pass `property_name` if it was matched to a specific property, or leave it blank to search everywhere (including the `general/` folder for unmatched attachments).
+2. Attach or paste the file directly into the Claude conversation — it gets base64-encoded and passed as `file_content_b64`.
+3. If neither applies, `screen_listings` explains how to supply one.
+
+**Required environment variable** (add to `confidentials/.env`):
+```
+GOOGLE_MAPS_API_KEY=AIzaSy...
+```
+Needs Elevation, Places, Roads, Geocoding, Distance Matrix, Static Maps, Street
+View Static, Solar, Address Validation, and/or Air Quality enabled — Phase 4
+auto-detects whichever subset is enabled for the key. If this key is not set,
+Phases 1-3 and finalist selection still run; only the Google ground-truth
+enrichment step is skipped.
+
+---
+
 ## How the Team Uses It
 
 1. Open **claude.ai** (already on Team plan — no extra cost)
@@ -77,7 +111,20 @@ vaulter-ai/
 │   ├── __init__.py
 │   ├── rag_engine.py          # ChromaDB retrieval and context assembly
 │   ├── analyzer.py            # Claude API calls — summaries, risk flags, Q&A
-│   └── prompts.py             # All Claude prompts in one place
+│   ├── prompts.py             # All Claude prompts in one place
+│   └── screening/             # CoStar Listing Screener (4-phase pipeline)
+│       ├── config.py                  # Hard rules + output columns
+│       ├── scoring_config.py          # Approved scoring map (land use / flood / etc.)
+│       ├── phase1_rules.py            # Phase 1 — hard rule engine
+│       ├── phase2_ranking.py          # Phase 2 — composite scoring/ranking
+│       ├── phase3_deep_analysis.py    # Phase 3 — Claude qualitative analysis
+│       ├── phase4_verification.py     # Phase 4 — Google Maps ground-truth + final verdict
+│       ├── market_utils.py            # Market detection/slugify helpers
+│       ├── workbook_builder.py        # Builds the combined 4-sheet results workbook
+│       ├── pipeline.py                # run_full_screening() — single entry point
+│       ├── dashboard_server.py        # Local dashboard web server
+│       └── dashboard/
+│           └── vaulter_dashboard.html # Interactive Pursue/Scrutinize/Pass dashboard
 │
 ├── mcp_server.py              # Stage 3 — MCP server (connects everything to claude.ai)
 │
@@ -101,6 +148,8 @@ vaulter-ai/
     ├── raw_web/               # Raw scraped text (audit trail)
     ├── raw_email/             # Raw email/attachment dumps (audit trail)
     ├── project_master/        # Drop Vaulter Project Master export here
+    ├── screening_uploads/     # CoStar files pasted/attached directly into a conversation
+    ├── screening_output/      # Combined screening workbooks + manifest.json
     └── web_sources/
         └── sources.csv        # Add/remove web scraping sources here
 ```

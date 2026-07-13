@@ -20,7 +20,7 @@ msal                # Microsoft Authentication Library (Outlook OAuth)
 apscheduler         # Background scheduler for automated jobs
 mammoth             # Extract text from Word (.docx) email attachments
 python-pptx         # Extract text from PowerPoint (.pptx) email attachments
-python-dotenv       # Load credentials from .env file
+python-dotenv       # Load credentials from ..env file
 Pillow              # Image handling for OCR on image email attachments
 
 # ── Stage 3: Claude Analysis + MCP Server ─────────────────────────
@@ -30,6 +30,11 @@ uvicorn             # ASGI server (required by MCP for SSE transport)
 
 # ── Stage 4: Speech-to-Knowledge ──────────────────────────────────
 openai              # Whisper API for audio transcription
+
+# ── CoStar Listing Screener (analysis/screening/) ─────────────────
+# No new packages needed — pandas, openpyxl, python-dotenv, anthropic,
+# and requests above already cover everything the 4-phase screening
+# pipeline and Google Maps Platform verification calls require.
 
 # ── External Tools (install separately, not via pip) ───────────────
 # Tesseract OCR  : https://github.com/UB-Mannheim/tesseract/wiki

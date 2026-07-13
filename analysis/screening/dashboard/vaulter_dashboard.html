@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vaulter Deal Review — Land Screening Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --paper: #eef0e8;
+  --paper-raised: #ffffff;
+  --ink: #23282a;
+  --ink-soft: #5a625f;
+  --line: #d3d7c9;
+  --navy: #1f2d38;
+  --navy-soft: #2c3e4c;
+  --pursue: #3a6b4f;
+  --pursue-bg: #e4ede7;
+  --scrutinize: #a8722f;
+  --scrutinize-bg: #f2e9d9;
+  --pass: #8b4a42;
+  --pass-bg: #f1e3e0;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
+
+.masthead {
+  background: var(--navy);
+  color: #f2f0e6;
+  padding: 28px 40px 22px;
+  border-bottom: 6px solid var(--navy-soft);
+}
+.masthead h1 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 700;
+  font-size: 30px;
+  margin: 0 0 4px;
+  letter-spacing: 0.2px;
+}
+.masthead p {
+  margin: 0;
+  font-size: 13.5px;
+  color: #b9c2c9;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+.upload-bar {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 40px 0;
+}
+.upload-panel {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.upload-btn {
+  background: var(--navy);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.upload-btn:hover { background: var(--navy-soft); }
+.download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--pursue-bg);
+  color: var(--pursue);
+  border: 1.5px solid var(--pursue);
+  padding: 9px 16px;
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+}
+.download-link:hover { background: var(--pursue); color: white; }
+.download-link.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.file-slots { display: flex; gap: 10px; flex-wrap: wrap; }
+.slot {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  background: #f6f7f2;
+}
+.slot.loaded {
+  color: var(--pursue);
+  border-color: var(--pursue);
+  background: var(--pursue-bg);
+  font-weight: 600;
+}
+.upload-hint { font-size: 12px; color: var(--ink-soft); margin: 10px 0 0; }
+
+.main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 40px 60px;
+}
+
+.tabs { display: flex; gap: 10px; margin-bottom: 18px; }
+.tab-btn {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 11px 22px 9px;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper-raised);
+  color: var(--ink-soft);
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: transform 0.08s ease;
+  position: relative;
+}
+.tab-btn .count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  margin-left: 8px;
+  opacity: 0.7;
+}
+.tab-btn:hover { transform: translateY(-1px); }
+.tab-btn.active[data-tab="pursue"] { border-color: var(--pursue); color: var(--pursue); background: var(--pursue-bg); }
+.tab-btn.active[data-tab="scrutinize"] { border-color: var(--scrutinize); color: var(--scrutinize); background: var(--scrutinize-bg); }
+.tab-btn.active[data-tab="pass"] { border-color: var(--pass); color: var(--pass); background: var(--pass-bg); }
+
+.empty-state {
+  background: var(--paper-raised);
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 50px 30px;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.empty-state strong { color: var(--ink); display: block; margin-bottom: 6px; font-family: 'Source Serif 4', serif; font-size: 17px; }
+
+table.deal-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+table.deal-table th {
+  text-align: left;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ink-soft);
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--line);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+table.deal-table th:hover { color: var(--ink); }
+table.deal-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid #eceee4;
+  font-size: 13.5px;
+  vertical-align: top;
+}
+table.deal-table tbody tr.data-row { cursor: pointer; }
+table.deal-table tbody tr.data-row:hover { background: #f7f8f2; }
+.addr-cell { font-weight: 600; }
+.addr-cell .sub { display: block; font-size: 11.5px; color: var(--ink-soft); font-weight: 400; margin-top: 1px; }
+.score-cell { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+.num-cell { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+
+.badge {
+  display: inline-block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  border: 1.5px solid currentColor;
+}
+.badge.tier-1 { color: var(--pursue); }
+.badge.tier-2 { color: var(--scrutinize); }
+.badge.tier-pass-ai { color: var(--pass); }
+.badge.tier-eliminated { color: var(--pass); opacity: 0.75; }
+.badge.tier-flagged { color: var(--scrutinize); }
+.badge.tier-unreviewed { color: var(--ink-soft); }
+
+.detail-row td {
+  background: #f6f7f0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+}
+.detail-inner { padding: 20px 26px 26px; }
+.detail-section { margin-bottom: 16px; }
+.detail-section:last-child { margin-bottom: 0; }
+.detail-section h4 {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+.detail-section ul { margin: 0; padding-left: 20px; }
+.detail-section li { margin-bottom: 4px; font-size: 13.5px; line-height: 1.5; }
+.detail-section p.muted { color: var(--ink-soft); font-size: 13px; font-style: italic; margin: 0; }
+.phase-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+.phase-divider .stamp {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: 2px solid var(--navy-soft);
+  color: var(--navy-soft);
+  padding: 3px 10px;
+  border-radius: 3px;
+  transform: rotate(-1.5deg);
+}
+.phase-divider .line { flex: 1; height: 1px; background: var(--line); }
+
+.reasons-box {
+  background: var(--scrutinize-bg);
+  border: 1px solid var(--scrutinize);
+  border-radius: 4px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #6b4a1f;
+}
+.no-analysis-note {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  .masthead, .upload-bar, .main { padding-left: 18px; padding-right: 18px; }
+  table.deal-table th:nth-child(n+4), table.deal-table td:nth-child(n+4) { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <h1>Vaulter Deal Review</h1>
+  <p>SCREENING RESULTS DASHBOARD</p>
+</div>
+
+<div class="upload-bar">
+  <div class="upload-panel">
+    <label for="marketSelect" style="font-family:'IBM Plex Mono',monospace; font-size:12px; color: var(--ink-soft);">MARKET:</label>
+    <select id="marketSelect" onchange="onMarketChange()" style="font-family:'IBM Plex Mono',monospace; font-size:13px; padding:8px 12px; border:1px solid var(--line); border-radius:4px; background:white; min-width:220px;">
+      <option value="">Loading markets...</option>
+    </select>
+    <a id="downloadLink" class="download-link disabled" href="#" download>⬇ Download Excel</a>
+    <span id="loadStatus" style="font-size:12px; color: var(--ink-soft);"></span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="tabs">
+    <button class="tab-btn" data-tab="pursue" onclick="switchTab('pursue')">Pursue <span class="count" id="count-pursue">0</span></button>
+    <button class="tab-btn" data-tab="scrutinize" onclick="switchTab('scrutinize')">Scrutinize <span class="count" id="count-scrutinize">0</span></button>
+    <button class="tab-btn" data-tab="pass" onclick="switchTab('pass')">Pass <span class="count" id="count-pass">0</span></button>
+  </div>
+  <div id="content"></div>
+</div>
+
+<script>
+// Output directory served by dashboard_server.py's start_dashboard_server(),
+// relative to the project root it serves (root_dir must be the merged
+// project's root -- see analysis/screening/dashboard_server.py docstring).
+const OUTPUT_DIR = '/data/screening_output';
+
+let store = { screening: null, ranked: null, deep: null, final: null };
+let records = [];
+let currentTab = null;
+let sortKey = 'Composite_Score';
+let sortDir = -1;
+let expandedAddr = null;
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function sheetToAOA(ws) {
+  if (!ws) return [];
+  return XLSX.utils.sheet_to_json(ws, {header: 1, defval: null});
+}
+
+function parseRowPerListing(aoa) {
+  if (!aoa || aoa.length === 0) return [];
+  const headers = aoa[0];
+  const rows = [];
+  for (let i = 1; i < aoa.length; i++) {
+    if (!aoa[i] || aoa[i].every(c => c === null)) continue;
+    const obj = {};
+    headers.forEach((h, idx) => obj[h] = aoa[i][idx]);
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseMatrix(aoa) {
+  if (!aoa || aoa.length === 0) return {};
+  const headerRow = aoa[0];
+  const addresses = headerRow.slice(1);
+  const result = {};
+  addresses.forEach(a => result[a] = {});
+  for (let r = 1; r < aoa.length; r++) {
+    const category = aoa[r][0];
+    for (let c = 1; c < aoa[r].length; c++) {
+      const addr = addresses[c - 1];
+      if (addr !== undefined && addr !== null) result[addr][category] = aoa[r][c];
+    }
+  }
+  return result;
+}
+
+let manifest = { markets: [] };
+
+async function loadManifest() {
+  const statusEl = document.getElementById('loadStatus');
+  try {
+    const resp = await fetch(OUTPUT_DIR + '/manifest.json', { cache: 'no-store' });
+    if (!resp.ok) throw new Error('manifest not found');
+    manifest = await resp.json();
+  } catch (e) {
+    statusEl.textContent = 'No results found yet — run screen_listings first.';
+    return;
+  }
+
+  const select = document.getElementById('marketSelect');
+  select.innerHTML = '';
+  if (!manifest.markets || manifest.markets.length === 0) {
+    select.innerHTML = '<option value="">No markets available</option>';
+    statusEl.textContent = 'No results found yet — run screen_listings first.';
+    return;
+  }
+
+  manifest.markets.forEach((m) => {
+    const opt = document.createElement('option');
+    opt.value = m.market_slug;
+    opt.textContent = m.market;
+    select.appendChild(opt);
+  });
+
+  onMarketChange();
+}
+
+// Fetches the ONE combined workbook for a market and parses all 4 named
+// sheets out of it via SheetJS, reconstructing the same screening/ranked/
+// deep/final data structures the rest of this dashboard's JS expects.
+async function fetchAndParseWorkbook(filename) {
+  const resp = await fetch(OUTPUT_DIR + '/' + filename, { cache: 'no-store' });
+  const buf = await resp.arrayBuffer();
+  const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+
+  const screeningWs = wb.Sheets['Phase1_Screening'];
+  const rankedWs = wb.Sheets['Phase2_Ranked'];
+  const deepWs = wb.Sheets['Phase3_Deep_Analysis'];
+  const finalWs = wb.Sheets['Phase4_Final_Verification'];
+
+  return {
+    screening: screeningWs ? parseRowPerListing(sheetToAOA(screeningWs)) : [],
+    ranked: rankedWs ? parseRowPerListing(sheetToAOA(rankedWs)) : [],
+    deep: deepWs ? parseMatrix(sheetToAOA(deepWs)) : {},
+    final: finalWs ? parseMatrix(sheetToAOA(finalWs)) : {},
+  };
+}
+
+async function onMarketChange() {
+  const select = document.getElementById('marketSelect');
+  const slug = select.value;
+  const entry = manifest.markets.find(m => m.market_slug === slug);
+  const statusEl = document.getElementById('loadStatus');
+  const downloadLink = document.getElementById('downloadLink');
+  if (!entry) return;
+
+  statusEl.textContent = 'Loading...';
+  currentTab = null;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  store = { screening: null, ranked: null, deep: null, final: null };
+
+  if (entry.workbook) {
+    downloadLink.href = OUTPUT_DIR + '/' + entry.workbook;
+    downloadLink.setAttribute('download', entry.workbook);
+    downloadLink.classList.remove('disabled');
+  } else {
+    downloadLink.classList.add('disabled');
+  }
+
+  if (entry.workbook) {
+    const parsed = await fetchAndParseWorkbook(entry.workbook);
+    store = parsed;
+  }
+
+  buildRecords();
+  render();
+  statusEl.textContent = '';
+}
+
+function tierFromText(text) {
+  const t = (text || '').toLowerCase().trim();
+  const firstLine = (t.split('\n')[0] || '').trim();
+  if (firstLine.startsWith('pass') || firstLine.startsWith('- pass')) return 3;
+  if (t.includes('conditional pursue') || t.includes('cautious pursue')) return 2;
+  if (t.includes('pursue')) return 1;
+  return 2;
+}
+
+function buildRecords() {
+  const byAddr = {};
+
+  const base = store.screening || store.ranked || [];
+  base.forEach(row => {
+    const addr = row['Property Address'];
+    if (!addr) return;
+    byAddr[addr] = Object.assign({}, row);
+  });
+
+  if (store.ranked) {
+    store.ranked.forEach(row => {
+      const addr = row['Property Address'];
+      if (!addr) return;
+      if (!byAddr[addr]) byAddr[addr] = Object.assign({}, row);
+      else Object.assign(byAddr[addr], row); // ranked's scoring data takes precedence
+    });
+  }
+
+  if (store.deep) {
+    Object.keys(store.deep).forEach(addr => {
+      if (!byAddr[addr]) byAddr[addr] = { 'Property Address': addr };
+      byAddr[addr].phase3 = store.deep[addr];
+    });
+  }
+
+  if (store.final) {
+    Object.keys(store.final).forEach(addr => {
+      if (!byAddr[addr]) byAddr[addr] = { 'Property Address': addr };
+      byAddr[addr].phase4 = store.final[addr];
+    });
+  }
+
+  records = Object.values(byAddr).map(classify);
+}
+
+function classify(r) {
+  if (r.phase4) {
+    const text = r.phase4.FINAL_RECOMMENDATION || r.phase4.Phase3_Recommendation || '';
+    const tier = tierFromText(text);
+    r.tab = tier === 3 ? 'pass' : 'pursue';
+    r.tier = tier;
+    r.passReason = tier === 3 ? 'ai' : null;
+    r.stage = 'Finalist';
+  } else if (r.phase3) {
+    const tier = tierFromText(r.phase3.RECOMMENDATION || '');
+    r.tab = tier === 3 ? 'pass' : 'pursue';
+    r.tier = tier;
+    r.passReason = tier === 3 ? 'ai' : null;
+    r.stage = 'Top N';
+  } else if (r.Screening_Status === 'ELIMINATED') {
+    r.tab = 'pass';
+    r.passReason = 'eliminated';
+    r.stage = 'Phase 1';
+  } else {
+    r.tab = 'scrutinize';
+    r.stage = 'Phase 1/2';
+  }
+  return r;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  expandedAddr = null;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  render();
+}
+
+function fmtMoney(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return '$' + Number(v).toLocaleString();
+}
+function fmtNum(v, suffix) {
+  if (v === null || v === undefined || v === '') return '—';
+  return Number(v).toLocaleString() + (suffix || '');
+}
+function fmtScore(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return Number(v).toFixed(1);
+}
+
+function renderBullets(text) {
+  if (!text || String(text).trim() === '') return '<p class="muted">No data available.</p>';
+  const lines = String(text).split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const items = lines.map(l => l.replace(/^[-•]\s*/, '').replace(/\*\*/g, ''));
+  return '<ul>' + items.map(l => '<li>' + escapeHtml(l) + '</li>').join('') + '</ul>';
+}
+
+const DIMENSION_LABELS = {
+  Score_DaysOnMarket: 'how long it has been listed',
+  Score_Price: 'price compared to other listings',
+  Score_LandUseCategory: 'how well its land use fits the target categories',
+  Score_DevelopedEnv: 'how developed the surrounding area appears to be',
+  Score_FloodRisk: 'flood risk',
+};
+
+function weakestDimensions(r) {
+  const entries = Object.keys(DIMENSION_LABELS)
+    .map(key => ({ label: DIMENSION_LABELS[key], score: r[key] }))
+    .filter(e => e.score !== null && e.score !== undefined && e.score !== '');
+  if (entries.length === 0) return [];
+  entries.sort((a, b) => a.score - b.score);
+  return entries.slice(0, 2).map(e => e.label + ' — scored ' + Number(e.score).toFixed(0) + ' out of 100');
+}
+
+function tierBadge(r) {
+  if (r.tab === 'pursue') {
+    return r.tier === 1
+      ? '<span class="badge tier-1">Recommended</span>'
+      : '<span class="badge tier-2">Worth Pursuing, With Conditions</span>';
+  }
+  if (r.tab === 'pass') {
+    return r.passReason === 'ai'
+      ? '<span class="badge tier-pass-ai">Reviewed — Not Recommended</span>'
+      : '<span class="badge tier-eliminated">Did Not Meet Criteria</span>';
+  }
+  return r.Screening_Status === 'FLAGGED'
+    ? '<span class="badge tier-flagged">Needs a Closer Look</span>'
+    : '<span class="badge tier-unreviewed">Not Reviewed Yet</span>';
+}
+
+function renderDetail(r) {
+  let html = '<div class="detail-inner">';
+
+  if (r.tab === 'pursue' || (r.tab === 'pass' && r.passReason === 'ai')) {
+    if (r.phase3) {
+      html += '<div class="phase-divider"><span class="stamp">Analyst Review</span><div class="line"></div></div>';
+      html += '<div class="detail-section"><h4>Strengths & Risks</h4>' + renderBullets(r.phase3.STRENGTHS_AND_RISKS) + '</div>';
+      html += '<div class="detail-section"><h4>Entitlement Risk</h4>' + renderBullets(r.phase3.ENTITLEMENT_RISK) + '</div>';
+      html += '<div class="detail-section"><h4>MOIC Fit</h4>' + renderBullets(r.phase3.MOIC_FIT) + '</div>';
+      html += '<div class="detail-section"><h4>Recommendation</h4>' + renderBullets(r.phase3.RECOMMENDATION) + '</div>';
+      html += '<div class="detail-section"><h4>Red Flags</h4>' + renderBullets(r.phase3.RED_FLAGS) + '</div>';
+    }
+    if (r.phase4) {
+      html += '<div class="phase-divider"><span class="stamp">Final Verification</span><div class="line"></div></div>';
+      if (String(r.phase4.VISUAL_INSPECTION || '').trim().toLowerCase().startsWith('skipped') ||
+          String(r.phase4.Composite_Score || '').toString().toLowerCase() === 'skipped') {
+        html += '<p class="no-analysis-note">Final verification was skipped — no Google Maps API key configured.</p>';
+      } else {
+        html += '<div class="detail-section"><h4>Visual Inspection</h4>' + renderBullets(r.phase4.VISUAL_INSPECTION) + '</div>';
+        html += '<div class="detail-section"><h4>Ground Truth Findings</h4>' + renderBullets(r.phase4.GROUND_TRUTH_FINDINGS) + '</div>';
+        html += '<div class="detail-section"><h4>Risk Assessment</h4>' + renderBullets(r.phase4.RISK_ASSESSMENT) + '</div>';
+        html += '<div class="detail-section"><h4>Final Recommendation</h4>' + renderBullets(r.phase4.FINAL_RECOMMENDATION) + '</div>';
+        html += '<div class="detail-section"><h4>Remaining Diligence Items</h4>' + renderBullets(r.phase4.REMAINING_DILIGENCE_ITEMS) + '</div>';
+      }
+    }
+  } else if (r.tab === 'scrutinize') {
+    const weakReasons = weakestDimensions(r);
+    html += '<div class="detail-section"><h4>Screening Notes</h4>';
+    if (r.Screening_Reasons && String(r.Screening_Reasons).trim() !== '') {
+      html += '<div class="reasons-box">' + escapeHtml(r.Screening_Reasons) + '</div>';
+      html += '<p class="no-analysis-note">This listing hasn\'t been reviewed in detail yet.</p>';
+    } else {
+      html += '<p style="margin: 0 0 8px; font-size: 13.5px;">This listing probably didn\'t rank high enough to get a full review. Main factors:</p>';
+      if (weakReasons.length > 0) {
+        html += '<ul>' + weakReasons.map(w => '<li>' + escapeHtml(w) + '</li>').join('') + '</ul>';
+      }
+      html += '<p class="no-analysis-note">It passed the initial checks with no specific concerns flagged — it just wasn\'t among the strongest candidates overall.</p>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="detail-section"><h4>Why This Was Passed On</h4>';
+    html += '<div class="reasons-box">' + escapeHtml(r.Screening_Reasons || 'No reason recorded.') + '</div>';
+    html += '<p class="no-analysis-note">This listing was removed automatically based on the criteria above, before any detailed review took place.</p>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function sortRecords(list) {
+  return list.slice().sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (av === null || av === undefined) av = -Infinity;
+    if (bv === null || bv === undefined) bv = -Infinity;
+    if (typeof av === 'string') return sortDir * String(av).localeCompare(String(bv));
+    return sortDir * (av - bv);
+  });
+}
+
+function setSort(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = -1; }
+  render();
+}
+
+function toggleExpand(addr) {
+  expandedAddr = (expandedAddr === addr) ? null : addr;
+  render();
+}
+
+function render() {
+  const tabCounts = { pursue: 0, scrutinize: 0, pass: 0 };
+  records.forEach(r => tabCounts[r.tab]++);
+  document.getElementById('count-pursue').textContent = tabCounts.pursue;
+  document.getElementById('count-scrutinize').textContent = tabCounts.scrutinize;
+  document.getElementById('count-pass').textContent = tabCounts.pass;
+
+  const content = document.getElementById('content');
+
+  if (currentTab === null) {
+    content.innerHTML = '';
+    return;
+  }
+
+  const list = sortRecords(records.filter(r => r.tab === currentTab));
+
+  if (list.length === 0) {
+    content.innerHTML = '';
+    return;
+  }
+
+  let html = '<table class="deal-table"><thead><tr>' +
+    '<th onclick="setSort(\'Property Address\')">Property</th>' +
+    '<th onclick="setSort(\'Composite_Score\')">Score</th>' +
+    '<th>Status</th>' +
+    '<th onclick="setSort(\'Land Area (AC)\')">Acres</th>' +
+    '<th onclick="setSort(\'For Sale Price\')">Price</th>' +
+    '<th onclick="setSort(\'Secondary Type\')">Type</th>' +
+    '<th onclick="setSort(\'Days On Market\')">Days Listed</th>' +
+    '</tr></thead><tbody>';
+
+  list.forEach(r => {
+    const addr = r['Property Address'];
+    html += '<tr class="data-row" data-addr="' + escapeHtml(addr) + '">' +
+      '<td class="addr-cell">' + escapeHtml(addr) + '<span class="sub">' + escapeHtml(r['City'] || '') + ', ' + escapeHtml(r['State'] || '') + ' · ' + escapeHtml(r['Submarket Name'] || '') + '</span></td>' +
+      '<td class="score-cell">' + fmtScore(r['Composite_Score']) + '</td>' +
+      '<td>' + tierBadge(r) + '</td>' +
+      '<td class="num-cell">' + fmtNum(r['Land Area (AC)']) + '</td>' +
+      '<td class="num-cell">' + fmtMoney(r['For Sale Price']) + '</td>' +
+      '<td class="num-cell">' + escapeHtml(r['Secondary Type'] || '—') + '</td>' +
+      '<td class="num-cell">' + fmtNum(r['Days On Market']) + '</td>' +
+      '</tr>';
+    if (expandedAddr === addr) {
+      html += '<tr class="detail-row"><td colspan="7">' + renderDetail(r) + '</td></tr>';
+    }
+  });
+
+  html += '</tbody></table>';
+  content.innerHTML = html;
+
+  content.querySelectorAll('tr.data-row').forEach(row => {
+    row.addEventListener('click', () => toggleExpand(row.dataset.addr));
+  });
+}
+
+loadManifest();
+</script>
+</body>
+</html>

@@ -30,6 +30,66 @@ log = logging.getLogger("vaulter.mcp")
 
 
 # ══════════════════════════════════════════════════════════════════
+# Screening Source Resolver
+# ══════════════════════════════════════════════════════════════════
+
+def _resolve_costar_source(source_file: str, property_name: str = "", file_content_b64: str = "") -> "Path | None":
+    """
+    Resolves a CoStar export / broker spreadsheet to an on-disk path, in
+    priority order:
+
+      (a) file_content_b64 non-empty -- the user pasted/uploaded the file
+          directly into the Claude conversation. Base64-decode it and
+          write to data/screening_uploads/<source_file>, returning that path.
+
+      (b) else search under PROCESSED_DIR (same folder watcher.py and
+          email_reader.py already write raw ingested files into)
+          recursively for a filename matching source_file (case-
+          insensitive). If property_name is given, narrow to a matching
+          property subfolder first; otherwise search everywhere,
+          including the "general/" folder used for unmatched attachments.
+
+      (c) else return None.
+    """
+    import base64
+    from config import PROCESSED_DIR, SCREENING_UPLOADS_DIR
+
+    if file_content_b64:
+        try:
+            SCREENING_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+            dest = SCREENING_UPLOADS_DIR / source_file
+            dest.write_bytes(base64.b64decode(file_content_b64))
+            return dest
+        except Exception as e:
+            log.warning(f"[MCP] Could not decode/write uploaded file content: {e}")
+            return None
+
+    if PROCESSED_DIR.exists():
+        target_lower = source_file.lower()
+        search_roots = []
+
+        if property_name:
+            for state_dir in PROCESSED_DIR.iterdir():
+                if not state_dir.is_dir():
+                    continue
+                for prop_dir in state_dir.iterdir():
+                    if prop_dir.is_dir() and property_name.lower() in prop_dir.name.lower():
+                        search_roots.append(prop_dir)
+
+        # Fall back to searching everywhere (including "general/") if no
+        # property-specific match was found or no property_name was given.
+        if not search_roots:
+            search_roots = [PROCESSED_DIR]
+
+        for root in search_roots:
+            for candidate in root.rglob("*"):
+                if candidate.is_file() and candidate.name.lower() == target_lower:
+                    return candidate
+
+    return None
+
+
+# ══════════════════════════════════════════════════════════════════
 # Background Services
 # ══════════════════════════════════════════════════════════════════
 
@@ -160,8 +220,18 @@ market conditions, risk flags, and broker communications.
 Always use the most specific tool available for the question.
 
 For screening inbound listings from a CoStar export or broker spreadsheet,
-use screen_listings — it gathers data from every source in the system and
-returns a complete dossier for you to evaluate each property."""
+use screen_listings. It runs the full 4-phase screening pipeline (hard-rule
+elimination, composite ranking, Claude deep analysis on the top candidates,
+and Google Maps ground-truth verification on the finalists) and returns a
+summary with the top candidates and where to find the full workbook. There
+are three ways to give it a CoStar file: (1) it's already in the system —
+pass property_name if the file was matched to a specific property, or
+leave it blank to search everywhere including unmatched broker emails;
+(2) attach/paste the file directly into the conversation and pass its
+base64 content as file_content_b64; (3) if neither applies, screen_listings
+will explain how to supply the file. After screening, call
+open_screening_dashboard to view the full breakdown (Pursue/Scrutinize/Pass
+tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
     )
 
     @mcp.tool()
@@ -472,27 +542,48 @@ returns a complete dossier for you to evaluate each property."""
         except Exception as e:
             return f"Could not open proximity folder: {e}"
 
-    # ── FOUR-STAGE LISTING SCREENER ───────────────────────────────
+    # ── FOUR-PHASE LISTING SCREENER ───────────────────────────────
 
     @mcp.tool()
-    def screen_listings(source_file: str = "CostarExport.xlsx", top_n: int = 10) -> str:
+    def screen_listings(
+        source_file: str = "CostarExport.xlsx",
+        property_name: str = "",
+        file_content_b64: str = "",
+        top_n: int = 10,
+    ) -> str:
         """
-        Run the five-stage listing screener on a CoStar export or broker spreadsheet.
+        Run the four-phase CoStar listing screening pipeline on a CoStar
+        export or broker spreadsheet.
 
-        Stage 0 (Claude)          — analyzes all columns in the export, dynamically
-          selects the ones with real signal (no hardcoded fields), generates hard
-          rules and scoring dimensions calibrated to this specific dataset.
-        Stage 1 (Python, instant) — eliminates listings hitting 2+ hard rule dealbreakers.
-        Stage 2 (Python, fast)    — scores all survivors, takes up to top_n highest
-          scorers as Pursue finalists. Everyone else becomes Scrutinize for Stage 3.
-        Stage 3 (Claude)          — reviews every Scrutinize and Stage 1 reject for
-          mistakes (hidden entitlement path, portfolio adjacency, rising submarket,
-          false-positive hard rule). Rescues get added to the Pursue list.
-        Stage 4 (Claude)          — full deep analysis on the Pursue list (up to top_n
-          + any Stage 3 rescues). Covers MOIC thesis, zoning, flood, infrastructure,
-          broker credibility, key risk, Google Earth verification prompt.
-        Stage 5 (Claude)          — renders a React dashboard showing ALL listings:
-          Pursue gets full analysis cards, Scrutinize and Pass get address + 2 flags.
+        Phase 1 (Python, instant) — applies deterministic hard rules (min
+          acreage, flood risk, land use category, existing structures, etc.)
+          and eliminates or flags listings accordingly.
+        Phase 2 (Python, fast)    — scores every Phase 1 survivor across 5
+          weighted dimensions (days on market, price, land use fit,
+          developed-environment penalty, flood risk) into a Composite_Score,
+          sorted descending.
+        Phase 3 (Claude)          — deep qualitative analysis on the top_n
+          ranked listings: strengths/risks, entitlement risk, MOIC fit, red
+          flags, and a pursue/conditional/pass recommendation.
+        Phase 4 (Claude + Google Maps) — selects finalists from the top_n
+          using Phase 3's recommendation tiering, then (if a Google Maps API
+          key is configured) runs real-world ground-truth verification
+          (elevation, places, roads, satellite/street view imagery, distance
+          to market, etc.) and a final multimodal Claude verdict per finalist.
+
+        There are three ways to supply the CoStar file:
+          1. It's already in the system (ingested via email or the folder
+             watcher) — pass property_name if it was matched to a specific
+             property, or leave property_name blank to search everywhere,
+             including the general/ folder for unmatched attachments.
+          2. Attach or paste the file directly into the conversation and
+             pass its base64-encoded content as file_content_b64.
+          3. If neither applies, this tool will explain how to supply one.
+
+        All 4 phases are written to a single combined Excel workbook. Call
+        open_screening_dashboard afterward to view the full breakdown in a
+        browser (Pursue/Scrutinize/Pass tabs, per-listing analyst notes, and
+        a direct Excel download).
 
         Use when asked to:
         - Screen, filter, or analyze listings from a CoStar export
@@ -500,186 +591,95 @@ returns a complete dossier for you to evaluate each property."""
         - Run an investment filter on inbound broker properties
 
         Args:
-            source_file: Filename of the CoStar export (default: CostarExport.xlsx)
-            top_n:       Max Pursue finalists from Stage 2, before Stage 3 rescues (default: 10)
+            source_file:      Filename of the CoStar export (default: CostarExport.xlsx)
+            property_name:    Optional property name to narrow the search for an
+                               already-ingested file (e.g. "Mesa Del Sol")
+            file_content_b64: Optional base64-encoded file content, if the user
+                               pasted/attached the file directly into the conversation
+            top_n:             Number of top-ranked listings to carry into Phase 3/4 (default: 10)
         """
         try:
-            from analysis.screener import run_pipeline, format_output
-            from analysis.rag_engine import (
-                free_search,
-                get_recent_emails,
-                get_recent_web_intelligence,
+            from analysis.screening.pipeline import run_full_screening
+            from config import ANTHROPIC_API_KEY, GOOGLE_MAPS_API_KEY
+
+            source_path = _resolve_costar_source(
+                source_file=source_file,
+                property_name=property_name,
+                file_content_b64=file_content_b64,
             )
-            from pipeline.property_scraper import load_properties
-            from ingestion.embedder import get_collection
-            from config import ANTHROPIC_API_KEY
 
-            # ── Pull CoStar chunks from ChromaDB ──────────────────
-            collection   = get_collection()
-            costar_chunks: list = []
-
-            if collection.count() > 0:
-                # Primary: exact source filename match
-                try:
-                    res = collection.get(
-                        where={"source": source_file},
-                        limit=200,
-                        include=["documents", "metadatas"],
-                    )
-                    if res and res.get("documents"):
-                        for doc, meta in zip(res["documents"], res["metadatas"]):
-                            costar_chunks.append({"text": doc, "meta": meta})
-                except Exception:
-                    pass
-
-                # Fallback A: match by attachment type + partial filename
-                if not costar_chunks:
-                    try:
-                        res = collection.get(
-                            where={"source": "CostarExport.xlsx"},
-                            limit=400,
-                            include=["documents", "metadatas"],
-                        )
-                        if res and res.get("documents"):
-                            stem = source_file.lower().replace(".xlsx", "").replace(".xls", "")
-                            for doc, meta in zip(res["documents"], res["metadatas"]):
-                                if stem in meta.get("source", "").lower():
-                                    costar_chunks.append({"text": doc, "meta": meta})
-                            if not costar_chunks:
-                                # No filename match — use all Excel attachments
-                                for doc, meta in zip(res["documents"], res["metadatas"]):
-                                    costar_chunks.append({"text": doc, "meta": meta})
-                    except Exception:
-                        pass
-
-                # Fallback B: semantic search
-                if not costar_chunks:
-                    costar_chunks = free_search(
-                        f"CoStar land listing acre zoning submarket price {source_file}", n=25
-                    )
-
-            if not costar_chunks:
+            if source_path is None:
+                property_clause = f' for property "{property_name}"' if property_name else ""
                 return (
-                    f"No CoStar data found for '{source_file}'.\n"
-                    f"Run check_inbox_now to pull the latest emails, then try again.\n"
-                    f"If the email has been checked, make sure the attachment was ingested "
-                    f"(check database stats)."
+                    f"Could not find a CoStar file matching '{source_file}'{property_clause}.\n\n"
+                    f"There are three ways to give me a file to screen:\n"
+                    f"  1. If it's already in the system, tell me the property it's linked to "
+                    f"(or say it's unmatched/general) and I'll search there.\n"
+                    f"  2. Attach or paste the CoStar export directly into this conversation.\n"
+                    f"  3. Run check_inbox_now first if the broker email hasn't been pulled yet, "
+                    f"then try again."
                 )
 
-            log.info(f"[MCP] screen_listings: {len(costar_chunks)} chunks for '{source_file}'")
+            log.info(f"[MCP] screen_listings: resolved source to {source_path}")
 
-            # ── Extract headers from the source Excel file ────────
-            # Headers let Stage 0 analyze column signal dynamically.
-            # Try the file directly first — ChromaDB chunks don't carry headers.
-            headers: list[str] = []
-            try:
-                import pandas as pd
-                from config import DATA_DIR
-                # Search common locations for the Excel file
-                search_paths = [
-                    DATA_DIR / "general" / source_file,
-                    DATA_DIR / source_file,
-                    DATA_DIR / "processed" / source_file,
-                ]
-                for p in search_paths:
-                    if p.exists():
-                        df_hdr = pd.read_excel(str(p), nrows=0)
-                        headers = list(df_hdr.columns)
-                        log.info(f"[MCP] screen_listings: loaded {len(headers)} headers from {p.name}")
-                        break
-            except Exception as e:
-                log.warning(f"[MCP] Could not read Excel headers: {e} — dynamic column selection will use heuristics")
+            result = run_full_screening(
+                source_path=source_path,
+                anthropic_api_key=ANTHROPIC_API_KEY,
+                google_api_key=GOOGLE_MAPS_API_KEY or None,
+                top_n=top_n,
+            )
 
-            # ── Stages 0, 1 & 2 — Python pipeline ────────────────
-            result = run_pipeline(costar_chunks, api_key=ANTHROPIC_API_KEY, top_n=top_n, headers=headers)
+            lines = [
+                f"SCREENING COMPLETE — {result['market']}",
+                "=" * 60,
+                f"Total listings screened : {result['total_screened']}",
+                f"Phase 1 survivors        : {result['phase1_survivors']}",
+                f"Reached Phase 3 (top {top_n})  : {len(result['top10_addresses'])}",
+                f"Reached Phase 4 finalists : {len(result['finalist_addresses'])}",
+                "",
+                "TOP CANDIDATES:",
+            ]
+            for c in result["top_candidates"]:
+                score = c.get("composite_score")
+                snippet = c.get("recommendation_snippet") or "(no Phase 3 recommendation)"
+                lines.append(f"  - {c['address']} | Composite: {score} | {snippet}")
 
-            if result.get("error") and result["total"] == 0:
-                return (
-                    f"Pipeline error: {result['error']}\n"
-                    f"Found {len(costar_chunks)} chunks but could not extract listing rows.\n"
-                    f"The file may not have been ingested as row-per-line Excel data."
-                )
+            if result["finalist_addresses"]:
+                lines.append("")
+                lines.append("PHASE 4 FINALISTS:")
+                for addr in result["finalist_addresses"]:
+                    tier = result["finalist_tiers"].get(addr)
+                    tier_label = {1: "Tier 1 — Pursue", 2: "Tier 2 — Conditional", 3: "Tier 3 — Pass"}.get(tier, "Unranked")
+                    lines.append(f"  - {addr} | {tier_label}")
 
-            # ── Portfolio context ──────────────────────────────────
-            portfolio: list = []
-            try:
-                portfolio, _ = load_properties()
-            except Exception as e:
-                log.warning(f"[MCP] Could not load portfolio: {e}")
+            lines.append("")
+            lines.append(f"Full workbook (all 4 phases): {result['workbook_path']}")
+            lines.append("Call open_screening_dashboard to view the full interactive breakdown in a browser.")
 
-            # ── Market intelligence ────────────────────────────────
-            web_intel = ""
-            try:
-                web_queries = [
-                    "Phoenix Arizona land market pricing per acre 2025 2026",
-                    "Loop 303 West I-10 East Valley land absorption development activity",
-                    "Arizona FEMA flood zone SFHA land development mitigation cost",
-                    "Gila Bend outlying Arizona land infrastructure utilities extension",
-                ]
-                web_chunks   = get_recent_web_intelligence(n=12)
-                seen_keys: set  = set()
-                merged_web: list = []
-                for c in web_chunks:
-                    k = c["text"][:80]
-                    if k not in seen_keys:
-                        seen_keys.add(k)
-                        merged_web.append(c)
-                for q in web_queries:
-                    for c in free_search(q, n=4):
-                        k = c["text"][:80]
-                        if k not in seen_keys:
-                            seen_keys.add(k)
-                            merged_web.append(c)
-
-                web_lines: list = []
-                for c in merged_web[:18]:
-                    src   = c.get("source", "")
-                    label = c.get("source_label", "Market Research")
-                    date  = (c.get("scraped_at") or "")[:10] or "unknown"
-                    web_lines.append(f"[{label} | {src} | {date}]")
-                    web_lines.append(c["text"][:600])
-                    web_lines.append("")
-                web_intel = "\n".join(web_lines)
-            except Exception as e:
-                web_intel = f"Could not load market intelligence: {e}"
-
-            # ── Email signals ──────────────────────────────────────
-            email_intel = ""
-            try:
-                RE_KW = {
-                    "costar", "acre", "listing", "zoning", "flood", "sfha",
-                    "submarket", "phoenix", "arizona", "land", "parcel",
-                    "infrastructure", "utility", "aps", "srp", "entitlement",
-                    "days on market", "price reduction",
-                }
-                email_chunks = get_recent_emails(n=25)
-                relevant = [
-                    c for c in email_chunks
-                    if any(kw in c["text"].lower() for kw in RE_KW)
-                ]
-                if relevant:
-                    e_lines: list = []
-                    for c in relevant[:10]:
-                        src  = c.get("source", "")
-                        subj = c.get("subject", "")
-                        date = (c.get("scraped_at") or "")[:10] or "unknown"
-                        hdr  = f"[Email | {src}"
-                        if subj:
-                            hdr += f" | Subject: {subj}"
-                        hdr += f" | {date}]"
-                        e_lines.append(hdr)
-                        e_lines.append(c["text"][:500])
-                        e_lines.append("")
-                    email_intel = "\n".join(e_lines)
-            except Exception:
-                pass
-
-            # ── Assemble and return ────────────────────────────────
-            return format_output(result, portfolio, web_intel, email_intel)
+            return "\n".join(lines)
 
         except Exception as e:
             log.error(f"[MCP] screen_listings failed: {e}", exc_info=True)
             return f"screen_listings failed: {e}"
+
+    @mcp.tool()
+    def open_screening_dashboard() -> str:
+        """
+        Open the CoStar listing screening dashboard in a browser.
+        Use this after screen_listings has been run, when the user wants to
+        see the full Pursue/Scrutinize/Pass breakdown, per-listing analyst
+        notes, or wants to download the combined screening workbook.
+        """
+        import webbrowser
+        try:
+            from analysis.screening.dashboard_server import start_dashboard_server
+
+            project_root = Path(__file__).parent
+            url = start_dashboard_server(project_root)
+            webbrowser.open(url)
+            return f"Opened the screening dashboard at {url}"
+        except Exception as e:
+            return f"Could not open screening dashboard: {e}"
 
     @mcp.tool()
     def run_google_places_export(property_name: str, radius_miles: float = 5.0) -> str:
@@ -709,7 +709,7 @@ returns a complete dossier for you to evaluate each property."""
 
         api_key = GOOGLE_PLACES_API_KEY.strip()
         if not api_key:
-            return "GOOGLE_PLACES_API_KEY not set. Add it to confidentials/.env and restart."
+            return "GOOGLE_PLACES_API_KEY not set. Add it to confidentials/..env and restart."
 
         return run_proximity_search(
             property_name=property_name,
