@@ -26,6 +26,7 @@ from pathlib import Path
 # Make sure the project root is on the path so `analysis.screening...` resolves
 sys.path.insert(0, str(Path(__file__).parent))
 
+from pathlib import Path
 from analysis.screening.pipeline import run_full_screening
 import config  # loads confidentials/.env the same way mcp_server.py does
 
