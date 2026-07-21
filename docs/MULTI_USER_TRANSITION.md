@@ -258,9 +258,46 @@ Python/OCR setup — read the existing JSON if present, add/update only the Vaul
 
 ### Priority 4 — Version & shared reference data
 Stamp a version on the code and on the shared results record so newer and older copies can't
-corrupt each other, and add a simple update path. The portfolio-documents-on-OneDrive piece
-originally scoped here (move the Project Master to the shared folder) has been superseded by
-the broader, confirmed decision in Part G — implement that instead of this narrower version.
+corrupt each other, and add a simple update path (see below). The portfolio-documents-on-OneDrive
+piece originally scoped here (move the Project Master to the shared folder) has been superseded
+by the broader, confirmed decision in Part G — implement that instead of this narrower version.
+
+**Why this matters more once bug-fixing is a real workflow.** The plan is: errors/bugs from
+across the team get collected somewhere central, a human periodically points Claude Code at
+them to investigate and fix, and the fix gets reviewed before merging (see the discussion
+above — deliberately NOT a fully autonomous pipeline that ships unreviewed fixes on its own).
+But a reviewed fix sitting in the codebase doesn't help anyone until it actually reaches their
+machine — and today, nothing does that automatically. Each person's instance is a fully
+independent local copy; a fix only reaches someone if they manually pull new code and
+reinstall. **This is a real, currently-missing piece, not just a nice-to-have.**
+
+**How auto-update would work for this architecture specifically.** Since there's no shared
+server to redeploy once (each person runs their own independent local copy), "updating
+everyone" means each person's own instance has to notice a new version exists and pull it down
+itself:
+- The background scheduler thread that already runs continuously on every instance (currently
+  handling email/web scraping) is the natural place to also periodically check a central
+  "what's the latest version" marker.
+- If a newer version exists, download it quietly in the background — no popup, no action
+  needed from the user.
+- Apply it **on next restart**, not by hot-swapping code while the server is actively running
+  — the same pattern Slack/Chrome/most auto-updating apps use, and much safer than patching a
+  live process.
+
+**The safeguard this needs: don't let a bad update break everyone at once.** Auto-updating
+immediately for the whole team means a subtle problem in a fix breaks every single person's
+copy simultaneously instead of just one. Two reasonable mitigations:
+- **Staged rollout ("canary"):** ship a new version to one or two people first, confirm it's
+  healthy, then let it reach everyone else — rather than pushing to all 10+ instances the
+  moment it's merged.
+- **Tie it to the health-check tool (Priority 1):** if errors spike right after an update goes
+  out on the canary machines, that's an early warning before it reaches everyone — the health
+  check becomes the safety net that catches a bad auto-update before it does wide damage.
+
+*For implementers: the version marker and the update package itself both need somewhere to
+live that every instance can reach — the same shared OneDrive location already used for
+screening output (Part C) and portfolio documents (Part G) is the natural fit, keeping this
+consistent with the rest of the shared-state design rather than introducing a new channel.*
 
 ---
 
