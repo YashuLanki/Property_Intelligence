@@ -13,6 +13,23 @@ data/logs/*
 data/registry/
 data/output/
 
+# Any backup/variant copy of the vector database under a different
+# name (e.g. a "_corrupted_backup" or "_old" copy someone makes before
+# a fix) -- data/chroma_db/* above only matches that one exact folder
+# name, so a real ~55MB database backup once slipped through under a
+# different name and got committed to git history. Deliberately
+# "chroma_db_*" (with the underscore), not "chroma_db*" -- matching the
+# bare "chroma_db*" would also match the real data/chroma_db/ directory
+# itself, and once a directory is excluded this way, a later "!" cannot
+# re-include a file inside it (confirmed directly: this broke the
+# existing "!data/chroma_db/.gitkeep" exception below when tried) --
+# so this pattern only catches name VARIANTS, never the original.
+data/chroma_db_*/
+
+# Same defensive net for any other ad hoc "*backup*" folder anyone
+# creates directly under data/ for any reason.
+data/*backup*/
+
 # ── Processed Files (ingested documents) ──────────────────────────
 data/processed/*
 
