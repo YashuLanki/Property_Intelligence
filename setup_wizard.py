@@ -3,7 +3,10 @@ setup_wizard.py
 ----------------
 Vaulter AI — guided setup wizard (Priority 3 in docs/MULTI_USER_TRANSITION.md).
 
-Run this once when setting up a new machine:
+Run this once when setting up a new machine. The non-technical way:
+double-click "Setup Vaulter AI.command" (Mac) or "Setup Vaulter AI.bat"
+(Windows) in this same folder -- no terminal needed. The manual/
+troubleshooting way, if you'd rather:
 
     python setup_wizard.py
 
@@ -22,9 +25,9 @@ English rather than assumed to have succeeded:
      to install Claude Desktop first if it isn't found.
 
 After this, per Priority 3's design, the ONLY step left for a
-non-technical user is signing into their own Microsoft account:
-
-    python main.py auth
+non-technical user is signing into their own Microsoft account by
+double-clicking "Sign In to Outlook.command" / ".bat" in this same
+folder.
 
 This script deliberately does NOT try to install Python itself (that's
 a separate, one-time step -- see README.md's Setup section for the
@@ -253,12 +256,12 @@ def _print_summary(results: dict) -> None:
     if all(results.values()):
         print()
         print("Everything is set up. The only step left is signing into your own")
-        print("Microsoft account:")
+        print("Microsoft account: double-click \"Sign In to Outlook\" in this same folder")
+        print("(the .command file on Mac, or the .bat file on Windows).")
         print()
-        print("    python main.py auth")
-        print()
-        print("After that, open Claude Desktop and start a new conversation — it will")
-        print("connect to your own local Vaulter AI instance automatically.")
+        print("After that, fully quit and reopen Claude Desktop and start a new")
+        print("conversation — it will connect to your own local Vaulter AI instance")
+        print("automatically.")
     else:
         print()
         print("Some steps need attention — see the ⚠/✗ notes above for exactly what to")
