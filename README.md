@@ -166,45 +166,52 @@ vaulter-ai/
 
 ## Setup
 
-For a non-technical staff member, this is the whole process — everything else
-below this is what makes it possible, not something you need to read.
+For a non-technical staff member, this is the whole process. No terminal, no
+typed commands — everything is either downloading, double-clicking, or
+signing in on a normal web page. Everything else below this section is what
+makes that possible, not something you need to read.
 
 ### 1. Install Python (one time, no admin rights needed)
 - **Windows**: https://www.python.org/downloads/ → run the installer → tick
   **"Install for me only"** (this is the option that needs no admin rights;
   its "for all users" option is the one that does).
-- **Mac**: `brew install python` (or use the official installer from
-  python.org). Recommended version: **3.11 or 3.12** — a much newer Python
-  may not yet have ready-to-use installs for some of this project's
-  dependencies, which the setup wizard below will warn you about if it
-  applies to you.
+- **Mac**: download the official installer from python.org and run it like
+  any other app installer. Recommended version: **3.11 or 3.12** — a much
+  newer Python may not yet have ready-to-use installs for some of this
+  project's dependencies, which the setup wizard below will warn you about
+  if it applies to you.
 
-### 2. Get the code
-```bash
-git clone https://github.com/YashuLanki/vaulter-ai.git
-cd vaulter-ai
-```
+### 2. Download the code
+Go to https://github.com/YashuLanki/vaulter-ai → click the green **Code**
+button → **Download ZIP** → unzip it into a folder (e.g. your Documents
+folder). This is a normal file download, no `git` needed.
 
-### 3. Run the setup wizard
-```bash
-python setup_wizard.py
-```
-This installs Python dependencies, checks for the OCR tools (Tesseract +
-Poppler) and tells you exactly how to install them if they're missing (also
-no admin rights needed), sets up `confidentials/.env` from the shared team
-template, and connects Claude Desktop to your own local instance — merging
-in its own entry without touching any other MCP server or setting Claude
-Desktop already has configured. It checks and reports each step in plain
-English rather than assuming success; it's also safe to run more than once.
+### 3. Double-click "Setup Vaulter AI"
+Inside the unzipped folder, double-click **`Setup Vaulter AI.command`** (Mac)
+or **`Setup Vaulter AI.bat`** (Windows). A plain window opens showing its
+progress — it installs Python dependencies, checks for the OCR tools
+(Tesseract + Poppler) and tells you exactly how to install them if they're
+missing (also no admin rights needed), sets up credentials from the shared
+team template, and connects Claude Desktop to your own local instance —
+merging in its own entry without touching any other MCP server or setting
+Claude Desktop already has configured. It reports each step in plain English
+rather than assuming success, and it's safe to double-click more than once.
+
+*Mac only, first time:* macOS may say the file "cannot be opened because it
+is from an unidentified developer." Right-click the file → **Open** → confirm
+— this is a normal one-time step for any downloaded script, not specific to
+this project.
 
 ### 4. Drop the Project Master into place
 Export the Vaulter Project Master from Smartsheet (PDF, CSV, or Excel) and
-drop it into `data/project_master/`.
+drag it into the `data/project_master/` folder — a normal file-manager
+drag-and-drop, nothing typed.
 
-### 5. Sign into Outlook — the one step that's genuinely yours
-```bash
-python main.py auth
-```
+### 5. Double-click "Sign In to Outlook" — the one step that's genuinely yours
+Double-click **`Sign In to Outlook.command`** (Mac) or
+**`Sign In to Outlook.bat`** (Windows). A window opens showing a short code
+and a web address — open that address in your browser and enter the code,
+exactly like signing into any other app with your Microsoft account.
 Everything else (the Azure app registration, the Anthropic/Google API keys)
 is a shared team value already baked in by the setup wizard — this is the
 only thing that's actually specific to you, since it's you proving your own
