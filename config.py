@@ -134,13 +134,16 @@ REGISTRY_FILE  = REGISTRY_DIR / "ingested_registry.json"
 # SHARED (under SHARED_DIR) on purpose so one person's analysis run is visible
 # to the whole team instead of sitting only on their own machine, avoiding
 # duplicate API calls and letting the team benefit from each run.
+# Monday meeting transcripts are also SHARED so the whole team can search them.
 OUTPUT_DIR            = DATA_DIR / "output"
 PROXIMITY_OUTPUT_DIR  = SHARED_DIR / "proximity_output"
 SCREENING_OUTPUT_DIR  = SHARED_DIR / "screening_output"
+MEETINGS_DIR          = SHARED_DIR / "meetings"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 PROXIMITY_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SCREENING_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+MEETINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Priority 4 (docs/MULTI_USER_TRANSITION.md) — auto-update. UPDATES_DIR is
 # where release.py (run by whoever ships a reviewed fix) publishes a new
