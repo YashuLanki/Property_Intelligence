@@ -531,7 +531,7 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
         try:
             from ingestion.embedder import get_stats
             from ingestion.registry import load_registry
-            from config import DATA_DIR
+            from config import REGISTRY_DIR
 
             stats = get_stats()
             registry = load_registry()
@@ -542,8 +542,8 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
                 except Exception:
                     return {}
 
-            email_registry_file = DATA_DIR / "email_registry.json"
-            web_registry = _load_json(DATA_DIR / "web_registry.json")
+            email_registry_file = REGISTRY_DIR / "email_registry.json"
+            web_registry = _load_json(REGISTRY_DIR / "web_registry.json")
             email_registry = _load_json(email_registry_file)
 
             timestamps = []
@@ -862,7 +862,7 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
         try:
             from ingestion.embedder import get_stats
             from ingestion.registry import load_registry
-            from config import DATA_DIR
+            from config import REGISTRY_DIR
             import json
 
             stats    = get_stats()
@@ -874,8 +874,8 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
                 except Exception:
                     return {}
 
-            email_registry = _load_json(DATA_DIR / "email_registry.json")
-            web_registry   = _load_json(DATA_DIR / "web_registry.json")
+            email_registry = _load_json(REGISTRY_DIR / "email_registry.json")
+            web_registry   = _load_json(REGISTRY_DIR / "web_registry.json")
 
             lines = [
                 f"Vaulter AI Database — {stats['total_chunks']:,} total chunks",
