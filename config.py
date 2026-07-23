@@ -158,6 +158,26 @@ PENDING_UPDATE_DIR = DATA_DIR / "pending_update"
 UPDATES_DIR.mkdir(parents=True, exist_ok=True)
 PENDING_UPDATE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Org-wide settings (e.g. a new feature's API key) distribution -- a
+# separate channel from the code-update one above, on purpose. A code
+# update package deliberately never includes confidentials/ (see
+# release.py's EXCLUDED_DIR_NAMES) specifically so one person's own
+# filled-in .env (with THEIR personal Outlook token) can never
+# accidentally ship to every other instance. Org-wide settings need
+# the opposite property -- everyone SHOULD end up with the same
+# value -- so this uses its own small, deliberate publish tool
+# (scripts/push_org_setting.py, run by the maintainer only) rather
+# than reusing release.py's blanket packaging.
+# ORG_SETTINGS_DIR is SHARED (every instance's scheduler reads it).
+# PENDING_SETTINGS_DIR is LOCAL -- staged here once downloaded, and
+# only written into confidentials/.env after a human says yes (see
+# apply_pending_settings in mcp_server.py).
+ORG_SETTINGS_DIR     = SHARED_DIR / "org_settings"
+PENDING_SETTINGS_DIR = DATA_DIR / "pending_settings"
+
+ORG_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+PENDING_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Which release channel this instance follows -- "general" (the default)
 # only picks up versions that have been explicitly promoted after a
 # canary check; "canary" picks up every new release immediately, before

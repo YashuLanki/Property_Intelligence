@@ -198,6 +198,76 @@ def _check_and_stage_update() -> None:
              f"run `python scripts/apply_update.py` when ready to apply it.")
 
 
+def _check_and_stage_org_settings() -> None:
+    """
+    Priority 4 extension: checks the shared org_settings folder for any
+    org-wide value (e.g. a new feature's API key, pushed via
+    scripts/push_org_setting.py) that this instance doesn't have filled
+    in locally yet, and stages it -- never writes into confidentials/.env
+    directly. A human confirms in a Claude conversation once
+    check_system_health surfaces it, and apply_pending_settings does the
+    actual write (see that tool's docstring for why this stays
+    deliberately generic in the conversation -- no key names or values
+    ever appear in anything sent back to Claude).
+
+    Only fills in a key that's currently blank/missing locally -- if
+    some value is already set (even an old one), this instance is
+    treated as already configured and left untouched. Safe to call
+    repeatedly. If a key is already staged locally but the maintainer
+    has since republished a DIFFERENT value for it (e.g. fixing a typo
+    before anyone applied the first one), the staged entry is updated
+    to match -- otherwise a staff member who hasn't yet said "yes"
+    would end up applying a stale, superseded value.
+    """
+    import datetime as _dt
+    import json
+    from dotenv import dotenv_values
+    from config import ORG_SETTINGS_DIR, PENDING_SETTINGS_DIR, SECRETS_DIR
+
+    if not ORG_SETTINGS_DIR.exists():
+        return
+
+    env_path = SECRETS_DIR / ".env"
+    local_values = dotenv_values(env_path) if env_path.exists() else {}
+
+    staged_path = PENDING_SETTINGS_DIR / "staged.json"
+    staged_entries = []
+    if staged_path.exists():
+        try:
+            staged_entries = json.loads(staged_path.read_text())
+        except Exception:
+            staged_entries = []
+    staged_by_key = {e["key"]: e for e in staged_entries if e.get("key")}
+
+    changed = False
+    for setting_file in ORG_SETTINGS_DIR.glob("*.json"):
+        try:
+            remote = json.loads(setting_file.read_text())
+        except Exception:
+            continue
+        key = remote.get("key", "").strip()
+        value = remote.get("value", "")
+        if not key or not value:
+            continue
+        if local_values.get(key):
+            continue  # already configured locally -- nothing to do
+        existing = staged_by_key.get(key)
+        if existing is not None and existing.get("value") == value:
+            continue  # already staged with this exact value -- nothing to do
+        staged_by_key[key] = {
+            "key": key,
+            "value": value,
+            "label": remote.get("label", key),
+            "staged_at": _dt.datetime.now().isoformat(timespec="seconds"),
+        }
+        changed = True
+
+    if changed:
+        staged_path.write_text(json.dumps(list(staged_by_key.values()), indent=2))
+        log.info(f"[ORG_SETTINGS] Staged {len(staged_by_key)} pending setting(s) -- "
+                 f"a human will be asked to confirm before anything is written.")
+
+
 # ══════════════════════════════════════════════════════════════════
 # Screening Source Resolver
 # ══════════════════════════════════════════════════════════════════
@@ -401,6 +471,28 @@ def _start_scheduler():
             replace_existing=True,
         )
 
+        # ── Check for new org-wide settings — daily at 5 AM ───────
+        # Separate channel from the code-update check above (see
+        # config.py's ORG_SETTINGS_DIR comment for why) -- same
+        # stage-then-confirm pattern: this only ever STAGES a value
+        # that's missing locally, never writes it into confidentials/
+        # .env on its own. See check_system_health and
+        # apply_pending_settings for the human-confirmed apply step.
+        def _check_for_org_settings():
+            try:
+                _check_and_stage_org_settings()
+                _record_job_run("check_org_settings")
+            except Exception as ex:
+                log.warning(f"[SCHEDULER] Org-settings check failed: {ex}")
+                _record_job_run("check_org_settings", error=ex)
+
+        scheduler.add_job(
+            _check_for_org_settings,
+            trigger=CronTrigger(hour=5, minute=5),
+            id="check_org_settings",
+            replace_existing=True,
+        )
+
         # ── Property intelligence — daily at 6 AM ─────────────────
         if RUN_SCHEDULED_SCRAPING:
             def _property_scrape():
@@ -496,7 +588,11 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
         Outlook sign-in, database freshness, background scheduler status
         (and last error per job), whether the shared team folder is really
         connected (vs silently fallen back to local-only), which portfolio
-        file is active, and the running code version. Strictly read-only.
+        file is active, and the running code version. Never changes any
+        of this instance's data or settings -- the one exception is the
+        Outlook check, which may silently refresh an about-to-expire
+        token (the same routine, non-destructive refresh that would
+        happen anyway the next time Outlook is actually used).
 
         Call this once, automatically, at the very start of every new
         conversation, before anything else -- not on every message, and
@@ -640,6 +736,29 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
         except Exception:
             pass  # update-check reporting is a nicety, never worth failing the whole check over
 
+        # ── Pending org-wide settings ─────────────────────────────
+        # Deliberately generic -- never names the specific key or
+        # mentions any value here. This text is what gets sent back
+        # into the conversation, so it must never contain anything
+        # that would reveal what the setting is, let alone its value.
+        try:
+            from config import PENDING_SETTINGS_DIR
+            staged_path = PENDING_SETTINGS_DIR / "staged.json"
+            if staged_path.exists():
+                pending = _json.loads(staged_path.read_text())
+                if pending:
+                    count = len(pending)
+                    phrase = "A new feature is" if count == 1 else f"{count} new features are"
+                    lines.append(f"  {phrase} ready to set up. Ask the user if they'd like you "
+                                  f"to set it up for them; if so, call apply_pending_settings "
+                                  f"(this is never done automatically without asking first).")
+                    issues.append(
+                        f"{phrase} ready to set up — ask the user if they'd like you to set it "
+                        f"up for them, and if so, call apply_pending_settings."
+                    )
+        except Exception:
+            pass  # same nicety as above -- never worth failing the whole check over
+
         summary = "HEALTHY" if not issues else f"{len(issues)} ISSUE(S) FOUND"
         body = "\n".join(lines)
         if issues:
@@ -695,6 +814,90 @@ tabs, per-listing analyst notes, and a direct Excel download) in a browser."""
         except Exception as e:
             log.error(f"[MCP] apply_pending_update failed: {e}", exc_info=True)
             return f"Could not apply the update: {e}"
+
+    @mcp.tool()
+    def get_pending_setup_details() -> str:
+        """
+        Get plain-English descriptions of any pending features that are
+        ready to set up. Use this when the user asks "what feature is
+        that?" or "what will this set up?" -- call this tool, then
+        explain the result to the user in simple language.
+
+        Never mention the specific setting name or any value; just
+        describe what the feature does, in non-technical terms that a
+        non-developer would understand.
+        """
+        try:
+            import json
+            from config import PENDING_SETTINGS_DIR
+
+            staged_path = PENDING_SETTINGS_DIR / "staged.json"
+            if not staged_path.exists():
+                return "No new features are currently waiting to be set up."
+            pending = json.loads(staged_path.read_text())
+            if not pending:
+                return "No new features are currently waiting to be set up."
+
+            descriptions = []
+            for i, entry in enumerate(pending, 1):
+                label = entry.get("label", "a new feature")
+                descriptions.append(label)
+
+            if len(descriptions) == 1:
+                return descriptions[0]
+            else:
+                return "New features: " + ", ".join(descriptions)
+        except Exception as e:
+            log.error(f"[MCP] get_pending_setup_details failed: {e}", exc_info=True)
+            return "Could not retrieve feature details."
+
+    @mcp.tool()
+    def apply_pending_settings() -> str:
+        """
+        Sets up a new feature that check_system_health has reported as
+        ready: writes a pending org-wide value (e.g. a new feature's API
+        key, distributed by the maintainer) directly into this
+        machine's own confidentials/.env. Never touches anything else.
+
+        IMPORTANT -- only call this after the user has explicitly agreed
+        IN THIS CONVERSATION (e.g. they said "yes, set it up" or "go
+        ahead"). Never call this proactively or speculatively.
+
+        IMPORTANT -- this tool's result, and anything you say about it,
+        must stay completely generic. Never mention the specific setting
+        name, or echo any value, in your reply to the user -- just
+        confirm it's done and that they should restart Claude Desktop.
+        The whole point of this tool is that the actual value is written
+        directly to disk in Python, without you ever needing to see or
+        repeat it.
+        """
+        try:
+            import json
+            from dotenv import set_key
+            from config import PENDING_SETTINGS_DIR, SECRETS_DIR
+
+            staged_path = PENDING_SETTINGS_DIR / "staged.json"
+            if not staged_path.exists():
+                return "Nothing to set up right now."
+            pending = json.loads(staged_path.read_text())
+            if not pending:
+                return "Nothing to set up right now."
+
+            env_path = SECRETS_DIR / ".env"
+            for entry in pending:
+                set_key(str(env_path), entry["key"], entry["value"])
+
+            count = len(pending)
+            staged_path.unlink(missing_ok=True)
+            log.info(f"[ORG_SETTINGS] Configured {count} pending setting(s).")
+
+            noun = "feature" if count == 1 else "features"
+            return (f"Done — {count} new {noun} set up. Tell the user to fully quit and reopen "
+                    f"Claude Desktop now for it to take effect. Do not mention any setting name "
+                    f"or value in your reply — just confirm it's set up.")
+        except Exception as e:
+            log.error(f"[MCP] apply_pending_settings failed: {e}", exc_info=True)
+            return "Could not finish setting this up — check the local logs for details."
 
     @mcp.tool()
     def search_database(query: str, n_results: int = 15) -> str:

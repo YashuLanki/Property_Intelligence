@@ -40,6 +40,12 @@ data/watched_folder/*
 data/project_master/*
 !data/project_master/.gitkeep
 
+# ── Auto-update staging (local, transient -- code zips + org-wide ──
+# setting values in plain text; the latter can be real API keys, so
+# this must never be committed, not even by accident via `git add -A`)
+data/pending_update/*
+data/pending_settings/*
+
 # ── Keep folder structure via .gitkeep ────────────────────────────
 !data/chroma_db/.gitkeep
 !data/raw_web/.gitkeep
