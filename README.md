@@ -192,10 +192,18 @@ or **`Setup Vaulter AI.bat`** (Windows). A plain window opens showing its
 progress — it installs Python dependencies, checks for the OCR tools
 (Tesseract + Poppler) and tells you exactly how to install them if they're
 missing (also no admin rights needed), sets up credentials from the shared
-team template, and connects Claude Desktop to your own local instance —
-merging in its own entry without touching any other MCP server or setting
-Claude Desktop already has configured. It reports each step in plain English
-rather than assuming success, and it's safe to double-click more than once.
+team template, connects Claude Desktop to your own local instance — merging
+in its own entry without touching any other MCP server or setting Claude
+Desktop already has configured — and finally signs you into your own
+Microsoft account right there in the same window: a short code and a web
+address appear, you open that address in your browser and enter the code,
+exactly like signing into any other app. That's the only thing in this
+whole process that's actually specific to you — everything else (the Azure
+app registration, the Anthropic/Google API keys) is a shared team value
+already baked in. It's also what keeps your own email private to your own
+instance — no one else's Claude session ever sees it. The wizard reports
+each step in plain English rather than assuming success, and it's safe to
+double-click more than once.
 
 *Mac only, first time:* macOS may say the file "cannot be opened because it
 is from an unidentified developer." Right-click the file → **Open** → confirm
@@ -207,22 +215,16 @@ Export the Vaulter Project Master from Smartsheet (PDF, CSV, or Excel) and
 drag it into the `data/project_master/` folder — a normal file-manager
 drag-and-drop, nothing typed.
 
-### 5. Double-click "Sign In to Outlook" — the one step that's genuinely yours
-Double-click **`Sign In to Outlook.command`** (Mac) or
-**`Sign In to Outlook.bat`** (Windows). A window opens showing a short code
-and a web address — open that address in your browser and enter the code,
-exactly like signing into any other app with your Microsoft account.
-Everything else (the Azure app registration, the Anthropic/Google API keys)
-is a shared team value already baked in by the setup wizard — this is the
-only thing that's actually specific to you, since it's you proving your own
-identity, not "technical setup." This is what keeps your own email private
-to your own instance — no one else's Claude session ever sees it.
-
-### 6. Restart Claude Desktop
+### 5. Restart Claude Desktop
 Fully quit and reopen it, then start a new conversation — it connects to
 your own local Vaulter AI instance automatically. This only works with
 Claude Desktop (or Claude Code), not the claude.ai website, since a web app
 can't launch a process on your own computer.
+
+*If your Outlook sign-in ever expires later on* (e.g. a password change),
+double-click **`Sign In to Outlook.command`** (Mac) or
+**`Sign In to Outlook.bat`** (Windows) in the same folder to redo just that
+one step — you don't need to re-run the whole setup wizard for this.
 
 <details>
 <summary><strong>Manual / advanced setup</strong> (troubleshooting, or if you'd rather not run the wizard)</summary>

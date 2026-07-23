@@ -23,11 +23,17 @@ English rather than assumed to have succeeded:
   5. Merges a "vaulter-ai" entry into Claude Desktop's own config file --
      without touching any other entry already in it -- or explains how
      to install Claude Desktop first if it isn't found.
+  6. Signs the user into their own Microsoft/Outlook account right here,
+     in this same window (device-code flow: a code and a URL are printed,
+     the user enters the code in their browser) -- skipped only if step 4's
+     organization-wide credentials aren't filled in yet.
 
-After this, per Priority 3's design, the ONLY step left for a
-non-technical user is signing into their own Microsoft account by
-double-clicking "Sign In to Outlook.command" / ".bat" in this same
-folder.
+Per Priority 3's design, this is now the ENTIRE setup for a non-technical
+user -- one double-click, ending with their own Microsoft sign-in inline,
+rather than a second file ("Sign In to Outlook.command"/".bat") they'd have
+no way to know to look for afterward. That second launcher still exists and
+still works standalone -- for troubleshooting, or re-authorizing later if a
+token expires -- it's just no longer a required step of first-time setup.
 
 This script deliberately does NOT try to install Python itself (that's
 a separate, one-time step -- see README.md's Setup section for the
@@ -239,6 +245,49 @@ def setup_claude_desktop() -> bool:
     return True
 
 
+def setup_outlook_auth() -> bool:
+    """
+    Signs the user into their own Microsoft/Outlook account -- folded into
+    this same guided flow instead of a separate launcher file a
+    non-technical user would have no way to know they need to find and
+    double-click afterward. This is the one step that's genuinely theirs
+    (proving their own identity, not "technical setup") -- per Priority
+    3's design intent, the realistic end state for a non-technical user
+    is "sign-in only," so it happens right here, in the same window, as
+    this wizard's last step.
+
+    Only called from main() when org-wide credentials (OUTLOOK_CLIENT_ID
+    etc.) are already confirmed present -- attempting this beforehand
+    would just fail with a confusing "client ID not set" error on top of
+    the clearer one setup_env_file() already reported.
+    """
+    _print_header("6. Sign in to your Microsoft/Outlook account")
+
+    try:
+        from pipeline.outlook_auth import get_access_token
+        get_access_token(interactive=False)
+        print("  ✓ Already signed in — nothing to do.")
+        return True
+    except Exception:
+        pass  # not signed in yet (or the token expired) -- fall through below
+
+    print("  A short code and a web address will appear below -- open that address")
+    print("  in your browser and enter the code, exactly like signing into any other")
+    print("  app with your Microsoft account. This is what keeps your own email")
+    print("  private to your own instance -- no one else's Claude session ever sees it.")
+    print()
+    try:
+        from pipeline.outlook_auth import run_auth_flow
+        run_auth_flow()
+        print("  ✓ Signed in.")
+        return True
+    except Exception as e:
+        print(f"  ⚠ Could not complete Outlook sign-in: {e}")
+        print("     You can try again later by double-clicking \"Sign In to Outlook\" "
+              "in this same folder, or by re-running this wizard.")
+        return False
+
+
 def main() -> None:
     print("Vaulter AI — Setup Wizard")
     print(f"Project root: {PROJECT_ROOT}")
@@ -259,6 +308,14 @@ def main() -> None:
     results["Credentials ready"] = setup_env_file()
     results["Claude Desktop connected"] = setup_claude_desktop()
 
+    if results["Credentials ready"]:
+        results["Signed in to Outlook"] = setup_outlook_auth()
+    else:
+        print()
+        print("Skipping the Outlook sign-in step for now -- organization-wide credentials "
+              "aren't filled in yet (see step 4 above). Re-run this wizard once they are.")
+        results["Signed in to Outlook"] = False
+
     _print_summary(results)
 
 
@@ -269,12 +326,9 @@ def _print_summary(results: dict) -> None:
 
     if all(results.values()):
         print()
-        print("Everything is set up. The only step left is signing into your own")
-        print("Microsoft account: double-click \"Sign In to Outlook\" in this same folder")
-        print("(the .command file on Mac, or the .bat file on Windows).")
-        print()
-        print("After that, fully quit and reopen Claude Desktop and start a new")
-        print("conversation — it will connect to your own local Vaulter AI instance")
+        print("Everything is set up, including signing into your own Microsoft account --")
+        print("there is nothing left to do. Fully quit and reopen Claude Desktop and start")
+        print("a new conversation -- it will connect to your own local Vaulter AI instance")
         print("automatically.")
     else:
         print()
